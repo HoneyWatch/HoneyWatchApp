@@ -243,9 +243,45 @@ def parse_cowrie() -> None:
     print(f"Cowrie: {inserted} new rows at {datetime.now()}")
 
 
-def parse_dionaea() -> None:
-    # TODO - po instalacji Dionaea
-    pass
+def parse_dionaea():
+    dionaea_db_path = '/opt/honeywatch/dionaea/lib/dionaea.sqlite'
+    if not os.path.exists(dionaea_db_path):
+        print(f"Brak bazy Dionaea: {dionaea_db_path}")
+        return
+
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    
+    try:
+        # Podłączamy zewnętrzną bazę w trybie tylko do odczytu (ro), aby nie blokować aplikacji
+        d_conn = sqlite3.connect(f"file:{dionaea_db_path}?mode=ro", uri=True)
+        d_c = d_conn.cursor()
+        
+        # Zapytanie odczytujące połączenia sieciowe (gotowe pod dodanie opcji parser_state)
+        d_c.execute("SELECT connection_timestamp, remote_host, remote_port, connection_protocol FROM connections")
+        rows = d_c.fetchall()
+        
+        for row in rows:
+            dt = datetime.fromtimestamp(row[0]).isoformat() if row[0] else None
+            src_ip = row[1]
+            src_port = row[2]
+            protocol = row[3]
+            event_type = f'dionaea_{protocol}'
+            
+            c.execute('''INSERT INTO attacks 
+                        (timestamp, src_ip, src_port, event_type, source)
+                        VALUES (?, ?, ?, ?, ?)''',
+                      (dt, src_ip, src_port, event_type, 'dionaea'))
+        
+        conn.commit()
+        print(f"Dionaea parsed at {datetime.now()}")
+        
+    except sqlite3.Error as e:
+        print(f"Błąd podczas parsowania bazy Dionaea: {e}")
+    finally:
+        if 'd_conn' in locals():
+            d_conn.close()
+        conn.close()
 
 
 def parse_opencanary() -> None:
