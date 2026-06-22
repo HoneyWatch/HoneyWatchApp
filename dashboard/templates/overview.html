@@ -29,25 +29,25 @@
 
 {% block content %}
 <section id="section-overview" class="kpi-grid">
-  <div class="card kpi">
+  <div class="card kpi" data-kpi="total_attacks">
     <div class="kpi-label">TOTAL ATTACKS</div>
-    <div class="kpi-value">{{ '{:,}'.format(summary.total_attacks.value) }}</div>
-    {{ delta(summary.total_attacks.delta_24h) }}
+    <div class="kpi-value" data-kpi-value>{{ '{:,}'.format(summary.total_attacks.value) }}</div>
+    <span class="kpi-delta-slot" data-kpi-delta>{{ delta(summary.total_attacks.delta_24h) }}</span>
   </div>
-  <div class="card kpi">
+  <div class="card kpi" data-kpi="unique_ips">
     <div class="kpi-label">UNIQUE IP ADDRESSES</div>
-    <div class="kpi-value">{{ '{:,}'.format(summary.unique_ips.value) }}</div>
-    {{ delta(summary.unique_ips.delta_24h) }}
+    <div class="kpi-value" data-kpi-value>{{ '{:,}'.format(summary.unique_ips.value) }}</div>
+    <span class="kpi-delta-slot" data-kpi-delta>{{ delta(summary.unique_ips.delta_24h) }}</span>
   </div>
-  <div class="card kpi">
+  <div class="card kpi" data-kpi="login_attempts">
     <div class="kpi-label">LOGIN ATTEMPTS</div>
-    <div class="kpi-value">{{ '{:,}'.format(summary.login_attempts.value) }}</div>
-    {{ delta(summary.login_attempts.delta_24h) }}
+    <div class="kpi-value" data-kpi-value>{{ '{:,}'.format(summary.login_attempts.value) }}</div>
+    <span class="kpi-delta-slot" data-kpi-delta>{{ delta(summary.login_attempts.delta_24h) }}</span>
   </div>
-  <div class="card kpi">
+  <div class="card kpi" data-kpi="countries">
     <div class="kpi-label">COUNTRIES</div>
-    <div class="kpi-value">{{ summary.countries.value }}</div>
-    {{ delta(summary.countries.delta_24h) }}
+    <div class="kpi-value" data-kpi-value>{{ summary.countries.value }}</div>
+    <span class="kpi-delta-slot" data-kpi-delta>{{ delta(summary.countries.delta_24h) }}</span>
   </div>
 </section>
 
@@ -117,7 +117,22 @@
   <div id="section-logs-table" class="card">
     <div class="card-head logs-table-head">
       <span class="card-title">ATTACK LOGS</span>
-      <span id="logs-table-meta" class="logs-table-meta"></span>
+      <div class="logs-filters">
+        <input
+          type="search"
+          id="logs-search"
+          class="logs-search"
+          placeholder="Search IP / username / password…"
+          autocomplete="off"
+        />
+        <select id="logs-source" class="logs-source" aria-label="Filter by source">
+          <option value="">All sources</option>
+          {% for s in log_sources %}
+          <option value="{{ s }}">{{ s }}</option>
+          {% endfor %}
+        </select>
+        <span id="logs-table-meta" class="logs-table-meta"></span>
+      </div>
     </div>
     <div class="logs-table-wrap">
       <table class="logs-table">

@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from . import geoip
@@ -144,9 +146,72 @@ def _window_sql(mod: str, range_key: str) -> str:
     return f"datetime(timestamp{mod}) >= datetime('now','-{period}')"
 
 
+# --------------------------------------------------------------------------- #
+# Performance: indexes + a small in-process TTL cache                          #
+# --------------------------------------------------------------------------- #
+_CACHE_TTL = 15.0  # seconds; VPS parser writes ~once/min, UI auto-refreshes ~30s
+_cache_store: dict = {}
+_cache_lock = threading.Lock()
+_indexes_ready = False
+
+
+def _ensure_indexes() -> None:
+    """Create helpful indexes once per process (best-effort, ignores failures)."""
+    global _indexes_ready
+    if _indexes_ready:
+        return
+    _indexes_ready = True  # set first so a read-only DB doesn't retry every call
+    statements = (
+        "PRAGMA journal_mode=WAL",
+        "CREATE INDEX IF NOT EXISTS idx_attacks_ts ON attacks(timestamp)",
+        "CREATE INDEX IF NOT EXISTS idx_attacks_src_ip ON attacks(src_ip)",
+        "CREATE INDEX IF NOT EXISTS idx_attacks_event_type ON attacks(event_type)",
+        "CREATE INDEX IF NOT EXISTS idx_attacks_source ON attacks(source)",
+        # Expression indexes matching the datetime() wrapping used in queries.
+        "CREATE INDEX IF NOT EXISTS idx_attacks_dt_iso ON attacks(datetime(timestamp))",
+        "CREATE INDEX IF NOT EXISTS idx_attacks_dt_epoch "
+        "ON attacks(datetime(timestamp,'unixepoch'))",
+    )
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            for stmt in statements:
+                try:
+                    conn.execute(stmt)
+                except sqlite3.Error:
+                    pass
+            conn.commit()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        pass
+
+
+def _cached(fn):
+    """Cache a function's result by its args for a short TTL."""
+
+    def wrapper(*args, **kwargs):
+        key = (fn.__name__, args, tuple(sorted(kwargs.items())))
+        now = time.monotonic()
+        with _cache_lock:
+            hit = _cache_store.get(key)
+            if hit and hit[0] > now:
+                return hit[1]
+        result = fn(*args, **kwargs)
+        with _cache_lock:
+            _cache_store[key] = (now + _CACHE_TTL, result)
+        return result
+
+    wrapper.__name__ = fn.__name__
+    wrapper.__doc__ = fn.__doc__
+    return wrapper
+
+
 def _connect() -> sqlite3.Connection:
+    _ensure_indexes()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA busy_timeout=3000")
     return conn
 
 
@@ -244,6 +309,7 @@ def _country_aggregate(conn: sqlite3.Connection, range_key: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Public API                                                                #
 # --------------------------------------------------------------------------- #
+@_cached
 def get_summary(period: str = "24h") -> dict:
     range_key = normalize_range(period)
     cfg = _RANGES[range_key]
@@ -281,6 +347,7 @@ def get_summary(period: str = "24h") -> dict:
     }
 
 
+@_cached
 def get_top_countries(limit: int = 10, period: str = "24h") -> list[dict]:
     with _connect() as conn:
         agg = _country_aggregate(conn, normalize_range(period))
@@ -297,6 +364,7 @@ def get_top_countries(limit: int = 10, period: str = "24h") -> list[dict]:
     return rows
 
 
+@_cached
 def get_geo(period: str = "24h") -> list[dict]:
     with _connect() as conn:
         agg = _country_aggregate(conn, normalize_range(period))
@@ -388,6 +456,7 @@ def _timeline_minutes(minutes: int) -> list[dict]:
     return out
 
 
+@_cached
 def get_timeline(period: str = "24h") -> list[dict]:
     """Attacks over time: per minute (1h), hourly (24h), or daily (week / month)."""
     range_key = normalize_range(period)
@@ -399,6 +468,7 @@ def get_timeline(period: str = "24h") -> list[dict]:
     return _timeline_days(cfg["timeline_days"])
 
 
+@_cached
 def get_event_types(period: str = "24h") -> list[dict]:
     range_key = normalize_range(period)
     with _connect() as conn:
@@ -442,14 +512,17 @@ def _top_field(field: str, limit: int, range_key: str) -> list[dict]:
     return [{"label": r["label"], "value": r["c"]} for r in rows]
 
 
+@_cached
 def get_top_usernames(limit: int = 8, period: str = "24h") -> list[dict]:
     return _top_field("username", limit, normalize_range(period))
 
 
+@_cached
 def get_top_passwords(limit: int = 8, period: str = "24h") -> list[dict]:
     return _top_field("password", limit, normalize_range(period))
 
 
+@_cached
 def get_heatmap(period: str = "24h") -> dict:
     """Attacks by day-of-week x hour-of-day in the selected window."""
     range_key = normalize_range(period)
@@ -473,6 +546,7 @@ def get_heatmap(period: str = "24h") -> dict:
     return {"days": _DAYS, "cells": cells}
 
 
+@_cached
 def get_recent(limit: int = 8, period: str = "24h") -> list[dict]:
     range_key = normalize_range(period)
     with _connect() as conn:
@@ -502,27 +576,61 @@ def get_recent(limit: int = 8, period: str = "24h") -> list[dict]:
     return out
 
 
+@_cached
+def get_log_sources() -> list[str]:
+    """Distinct ``source`` values present in the DB (for the filter dropdown)."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT source FROM attacks "
+            "WHERE source IS NOT NULL AND source <> '' ORDER BY source"
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+@_cached
 def get_logs(
-    period: str = "24h", limit: int = 100, offset: int = 0
+    period: str = "24h",
+    limit: int = 100,
+    offset: int = 0,
+    search: str = "",
+    source: str = "",
 ) -> dict:
-    """Paginated attack log rows for the logs table."""
+    """Paginated, filterable attack log rows for the logs table.
+
+    ``search`` matches src_ip / username / password (substring).
+    ``source`` restricts to a single honeypot source (e.g. ``cowrie``).
+    """
     range_key = normalize_range(period)
     limit = min(max(int(limit), 1), 500)
     offset = max(int(offset), 0)
+    search = (search or "").strip()
+    source = (source or "").strip()
 
     with _connect() as conn:
         mod = _ts_mod(conn)
-        window = _window_sql(mod, range_key)
+        filters = [_window_sql(mod, range_key)]
+        params: list = []
+        if search:
+            like = f"%{search}%"
+            filters.append(
+                "(src_ip LIKE ? OR username LIKE ? OR password LIKE ?)"
+            )
+            params.extend([like, like, like])
+        if source:
+            filters.append("source = ?")
+            params.append(source)
+        where = " AND ".join(filters)
+
         total = conn.execute(
-            f"SELECT COUNT(*) FROM attacks WHERE {window}"
+            f"SELECT COUNT(*) FROM attacks WHERE {where}", params
         ).fetchone()[0]
         rows = conn.execute(
             f"SELECT id, timestamp, src_ip, src_port, username, password, "
             f"event_type, source, "
             f"strftime('%Y-%m-%d %H:%M:%S', timestamp{mod}) AS ts "
-            f"FROM attacks WHERE {window} "
+            f"FROM attacks WHERE {where} "
             f"ORDER BY datetime(timestamp{mod}) DESC LIMIT ? OFFSET ?",
-            (limit, offset),
+            params + [limit, offset],
         ).fetchall()
         geo = geoip.locate([r["src_ip"] for r in rows if r["src_ip"]])
 

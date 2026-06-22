@@ -32,6 +32,7 @@ def overview():
         summary=db.get_summary(period=range_key),
         top_countries=db.get_top_countries(period=range_key),
         recent=db.get_recent(period=range_key),
+        log_sources=db.get_log_sources(),
         active_page="overview",
     )
 
@@ -85,7 +86,17 @@ def api_recent():
 def api_logs():
     limit = request.args.get("limit", 100, type=int)
     offset = request.args.get("offset", 0, type=int)
-    return jsonify(db.get_logs(period=_range(), limit=limit, offset=offset))
+    search = (request.args.get("search") or "").strip()
+    source = (request.args.get("source") or "").strip()
+    return jsonify(
+        db.get_logs(
+            period=_range(),
+            limit=limit,
+            offset=offset,
+            search=search,
+            source=source,
+        )
+    )
 
 
 def main() -> None:

@@ -25,6 +25,13 @@
     return `${path}${sep}range=${encodeURIComponent(currentRange())}`;
   }
 
+  // Chart instances (so auto-refresh can update in place, no page reload).
+  const charts = {};
+  let isRefreshing = false;
+  let mapFitted = false;
+
+  const RANGE_DELTA = { "1h": "1h", "24h": "24h", week: "7d", month: "30d" };
+
   function applyChartDefaults() {
     if (typeof Chart === "undefined") return;
     Chart.defaults.color = COLORS.tick;
@@ -129,11 +136,15 @@
       markerLayer.addLayer(marker);
     });
 
-    const bounds = L.latLngBounds(valid.map((p) => [p.lat, p.lng]));
-    if (valid.length === 1) {
-      attackMap.setView(bounds.getCenter(), 4);
-    } else {
-      attackMap.fitBounds(bounds.pad(0.3));
+    // Only fit/zoom on the first render so auto-refresh keeps the user's view.
+    if (!mapFitted) {
+      const bounds = L.latLngBounds(valid.map((p) => [p.lat, p.lng]));
+      if (valid.length === 1) {
+        attackMap.setView(bounds.getCenter(), 4);
+      } else {
+        attackMap.fitBounds(bounds.pad(0.3));
+      }
+      mapFitted = true;
     }
 
     requestAnimationFrame(() => attackMap.invalidateSize());
@@ -142,11 +153,20 @@
   /* ---------- Charts ---------- */
   function initTimeline(data) {
     const ctx = document.getElementById("timeline-chart");
+    if (!ctx) return;
+
+    if (charts.timeline) {
+      charts.timeline.data.labels = data.map((d) => d.label);
+      charts.timeline.data.datasets[0].data = data.map((d) => d.value);
+      charts.timeline.update("none");
+      return;
+    }
+
     const grad = ctx.getContext("2d").createLinearGradient(0, 0, 0, 200);
     grad.addColorStop(0, "rgba(245,158,11,0.35)");
     grad.addColorStop(1, "rgba(245,158,11,0.0)");
 
-    new Chart(ctx, {
+    charts.timeline = new Chart(ctx, {
       type: "line",
       data: {
         labels: data.map((d) => d.label),
@@ -184,7 +204,18 @@
   }
 
   function horizontalBars(canvasId, data, color) {
-    new Chart(document.getElementById(canvasId), {
+    const el = document.getElementById(canvasId);
+    if (!el) return;
+
+    const existing = charts[canvasId];
+    if (existing) {
+      existing.data.labels = data.map((d) => d.label);
+      existing.data.datasets[0].data = data.map((d) => d.value);
+      existing.update("none");
+      return;
+    }
+
+    charts[canvasId] = new Chart(el, {
       type: "bar",
       data: {
         labels: data.map((d) => d.label),
@@ -214,37 +245,76 @@
   }
 
   function initDonut(data) {
-    new Chart(document.getElementById("types-chart"), {
-      type: "doughnut",
-      data: {
-        labels: data.map((d) => d.label),
-        datasets: [
-          {
-            data: data.map((d) => d.value),
-            backgroundColor: data.map((d) => d.color),
-            borderWidth: 0,
+    const el = document.getElementById("types-chart");
+    if (el) {
+      if (charts.types) {
+        charts.types.data.labels = data.map((d) => d.label);
+        charts.types.data.datasets[0].data = data.map((d) => d.value);
+        charts.types.data.datasets[0].backgroundColor = data.map((d) => d.color);
+        charts.types.update("none");
+      } else {
+        charts.types = new Chart(el, {
+          type: "doughnut",
+          data: {
+            labels: data.map((d) => d.label),
+            datasets: [
+              {
+                data: data.map((d) => d.value),
+                backgroundColor: data.map((d) => d.color),
+                borderWidth: 0,
+              },
+            ],
           },
-        ],
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: "68%",
-        plugins: {
-          legend: { display: false },
-          tooltip: { callbacks: { label: (c) => `${c.raw}%` } },
-        },
-      },
-    });
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: "68%",
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: (c) => `${c.raw}%` } },
+            },
+          },
+        });
+      }
+    }
 
     const legend = document.getElementById("types-legend");
-    legend.innerHTML = data
-      .map(
-        (d) =>
-          `<li><span class="legend-dot" style="background:${d.color}"></span>` +
-          `<span>${d.label}</span><span class="legend-pct">${d.value}%</span></li>`
-      )
-      .join("");
+    if (legend) {
+      legend.innerHTML = data
+        .map(
+          (d) =>
+            `<li><span class="legend-dot" style="background:${d.color}"></span>` +
+            `<span>${d.label}</span><span class="legend-pct">${d.value}%</span></li>`
+        )
+        .join("");
+    }
+  }
+
+  /* ---------- KPIs (updated live on auto-refresh) ---------- */
+  function renderDelta(value) {
+    const up = value >= 0;
+    const arrow = up ? "6 14 12 8 18 14" : "6 10 12 16 18 10";
+    const label = RANGE_DELTA[currentRange()] || "24h";
+    const sign = value >= 0 ? "+" : "";
+    return (
+      `<span class="kpi-delta ${up ? "up" : "down"}">` +
+      `<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" ` +
+      `stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
+      `<polyline points="${arrow}"/></svg> ` +
+      `${sign}${value.toFixed(1)}% (${label})</span>`
+    );
+  }
+
+  function updateKpis(summary) {
+    document.querySelectorAll("[data-kpi]").forEach((card) => {
+      const key = card.dataset.kpi;
+      const entry = summary[key];
+      if (!entry) return;
+      const valueEl = card.querySelector("[data-kpi-value]");
+      const deltaEl = card.querySelector("[data-kpi-delta]");
+      if (valueEl) valueEl.textContent = Number(entry.value).toLocaleString();
+      if (deltaEl) deltaEl.innerHTML = renderDelta(Number(entry.delta_24h));
+    });
   }
 
   /* ---------- Heatmap ---------- */
@@ -282,6 +352,7 @@
   /* ---------- Logs table ---------- */
   const LOGS_PAGE_SIZE = 100;
   let logsOffset = 0;
+  const logsFilters = { search: "", source: "" };
 
   function escapeHtml(text) {
     return String(text)
@@ -332,7 +403,14 @@
   }
 
   function loadLogsTable(offset) {
-    const url = `${apiUrl("/api/logs")}&limit=${LOGS_PAGE_SIZE}&offset=${offset}`;
+    let url =
+      `${apiUrl("/api/logs")}&limit=${LOGS_PAGE_SIZE}&offset=${offset}`;
+    if (logsFilters.search) {
+      url += `&search=${encodeURIComponent(logsFilters.search)}`;
+    }
+    if (logsFilters.source) {
+      url += `&source=${encodeURIComponent(logsFilters.source)}`;
+    }
     return getJSON(url).then(renderLogsTable).catch(() => {
       const body = document.getElementById("logs-table-body");
       if (body) {
@@ -342,9 +420,19 @@
     });
   }
 
+  function debounce(fn, wait) {
+    let t;
+    return function (...args) {
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), wait);
+    };
+  }
+
   function initLogsTable() {
     const prevBtn = document.getElementById("logs-prev");
     const nextBtn = document.getElementById("logs-next");
+    const searchEl = document.getElementById("logs-search");
+    const sourceEl = document.getElementById("logs-source");
     if (!document.getElementById("logs-table-body")) return;
 
     loadLogsTable(0);
@@ -359,22 +447,95 @@
         loadLogsTable(logsOffset + LOGS_PAGE_SIZE);
       });
     }
+    if (searchEl) {
+      searchEl.addEventListener(
+        "input",
+        debounce(() => {
+          logsFilters.search = searchEl.value.trim();
+          loadLogsTable(0); // reset to first page on new query
+        }, 350)
+      );
+    }
+    if (sourceEl) {
+      sourceEl.addEventListener("change", () => {
+        logsFilters.source = sourceEl.value;
+        loadLogsTable(0);
+      });
+    }
   }
 
   /* ---------- Boot ---------- */
+  function fetchAllData() {
+    getJSON(apiUrl("/api/summary")).then(updateKpis).catch(() => {});
+    getJSON(apiUrl("/api/geo")).then(initMap).catch(() => {});
+    getJSON(apiUrl("/api/timeline")).then(initTimeline).catch(() => {});
+    getJSON(apiUrl("/api/top-usernames"))
+      .then((d) => horizontalBars("usernames-chart", d, COLORS.accent))
+      .catch(() => {});
+    getJSON(apiUrl("/api/top-passwords"))
+      .then((d) => horizontalBars("passwords-chart", d, COLORS.red))
+      .catch(() => {});
+    getJSON(apiUrl("/api/event-types")).then(initDonut).catch(() => {});
+    getJSON(apiUrl("/api/heatmap")).then(initHeatmap).catch(() => {});
+  }
+
   function load() {
     applyChartDefaults();
-    getJSON(apiUrl("/api/geo")).then(initMap);
-    getJSON(apiUrl("/api/timeline")).then(initTimeline);
-    getJSON(apiUrl("/api/top-usernames")).then((d) =>
-      horizontalBars("usernames-chart", d, COLORS.accent)
-    );
-    getJSON(apiUrl("/api/top-passwords")).then((d) =>
-      horizontalBars("passwords-chart", d, COLORS.red)
-    );
-    getJSON(apiUrl("/api/event-types")).then(initDonut);
-    getJSON(apiUrl("/api/heatmap")).then(initHeatmap);
+    fetchAllData();
     initLogsTable();
+  }
+
+  function refreshData() {
+    isRefreshing = true;
+    fetchAllData();
+    loadLogsTable(logsOffset); // keep current page + active filters
+    isRefreshing = false;
+  }
+
+  /* ---------- Auto-refresh ---------- */
+  const AUTO_INTERVAL_MS = 30000;
+  let autoTimer = null;
+
+  function initAutoRefresh() {
+    const btn = document.getElementById("autorefresh-btn");
+    const label = document.getElementById("autorefresh-label");
+    if (!btn) return;
+
+    const stored = localStorage.getItem("hw_autorefresh");
+    let enabled = stored === null ? true : stored === "on";
+
+    function apply() {
+      btn.setAttribute("aria-pressed", enabled ? "true" : "false");
+      if (label) label.textContent = enabled ? "Auto-refresh: on" : "Auto-refresh: off";
+      if (autoTimer) {
+        clearInterval(autoTimer);
+        autoTimer = null;
+      }
+      if (enabled) {
+        autoTimer = setInterval(refreshData, AUTO_INTERVAL_MS);
+      }
+    }
+
+    btn.addEventListener("click", () => {
+      enabled = !enabled;
+      localStorage.setItem("hw_autorefresh", enabled ? "on" : "off");
+      apply();
+    });
+
+    // Pause polling when the tab is hidden; resume when visible.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (autoTimer) {
+          clearInterval(autoTimer);
+          autoTimer = null;
+        }
+      } else if (enabled && !autoTimer) {
+        refreshData();
+        autoTimer = setInterval(refreshData, AUTO_INTERVAL_MS);
+      }
+    });
+
+    apply();
   }
 
   function initSectionNav() {
@@ -434,8 +595,11 @@
   document.addEventListener("DOMContentLoaded", () => {
     load();
     initSectionNav();
+    initAutoRefresh();
   });
 
   const refresh = document.getElementById("refresh-btn");
-  if (refresh) refresh.addEventListener("click", () => window.location.reload());
+  if (refresh) {
+    refresh.addEventListener("click", () => refreshData());
+  }
 })();
