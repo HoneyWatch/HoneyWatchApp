@@ -68,6 +68,24 @@ W przeglądarce na PC:
 
 Powinno pokazywać realne liczby z bazy (nie mock 15892).
 
+## Parser (bez duplikatów)
+
+Parser w `deploy/parser.py` czyta logi **tylko od ostatniej pozycji** (`parser_state`) i pomija **identyczne** wpisy (`INSERT OR IGNORE` + indeks UNIQUE). Ten sam IP może atakować wiele razy — odrzucane są tylko pełne duplikaty z ponownego parsowania.
+
+Wgranie na VPS (np. do `/opt/honeywatch/parser.py`):
+
+```powershell
+scp -P 2223 deploy/parser.py root@91.228.196.200:/opt/honeywatch/parser.py
+```
+
+Pierwsze uruchomienie po aktualizacji usuwa stare duplikaty i zakłada indeksy:
+
+```bash
+python3 /opt/honeywatch/parser.py
+```
+
+**Uwaga:** przy pierwszym uruchomieniu nowego parsera offset startuje od końca pliku (nie reimportuje całej historii). Aby przejść od początku logu: `DELETE FROM parser_state;` i uruchom parser ponownie (wtedy dedup i tak zablokuje identyczne linie).
+
 ## Aktualizacja po zmianach w kodzie
 
 Z Windows:

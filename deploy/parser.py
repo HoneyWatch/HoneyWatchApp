@@ -1,4 +1,4 @@
-"""HoneyWatch log parser — Cowrie + OpenCanary -> SQLite.
+"""HoneyWatch log parser — Cowrie + Dionaea + OpenCanary -> SQLite.
 
 Reads only *new* bytes from each log file (parser_state). Identical events
 are skipped via UNIQUE indexes (same IP may attack many times; exact duplicates
@@ -14,6 +14,41 @@ from datetime import datetime
 DB_PATH = "/opt/honeywatch/honeywatch.db"
 COWRIE_LOG = "/home/cowrie/cowrie/var/log/cowrie/cowrie.json"
 OPENCANARY_LOG = "/var/log/opencanary.log"
+# Dionaea log_json ihandler output (file:// handler). Common alternatives:
+#   /opt/dionaea/var/lib/dionaea/dionaea.json, /var/lib/dionaea/dionaea.json
+DIONAEA_LOG = "/opt/dionaea/var/lib/dionaea/dionaea.json"
+
+# Map Dionaea service/protocol names to dashboard event_type values.
+# Unknown protocols fall back to their lowercased name (shown as "Other").
+DIONAEA_PROTOCOL_MAP = {
+    "httpd": "http_probe",
+    "http": "http_probe",
+    "ftp": "ftp",
+    "ftpd": "ftp",
+    "smbd": "smb",
+    "smb": "smb",
+    "mysqld": "mysql",
+    "mysql": "mysql",
+    "mssqld": "mssql",
+    "mssql": "mssql",
+    "sipsession": "sip",
+    "sip": "sip",
+    "epmapper": "epmap",
+    "mqttd": "mqtt",
+    "mqtt": "mqtt",
+    "tftp": "tftp",
+    "tftpd": "tftp",
+    "pptp": "pptp",
+    "upnp": "upnp",
+    "blackhole": "blackhole",
+    "mongod": "mongodb",
+    "mongo": "mongodb",
+    "memcached": "memcache",
+    "memcache": "memcache",
+}
+
+# Only inbound connection types are real attacks; skip listen/connect (outbound).
+DIONAEA_INBOUND_TYPES = {"accept", "reject"}
 
 
 def init_db() -> None:
@@ -243,6 +278,7 @@ def parse_cowrie() -> None:
     print(f"Cowrie: {inserted} new rows at {datetime.now()}")
 
 
+<<<<<<< Updated upstream
 DIONAEA_LOG = '/opt/dionaea/var/log/dionaea/dionaea.json'
 
 EVENT_MAP = {
@@ -342,6 +378,84 @@ def parse_dionaea():
     conn.commit()
     conn.close()
     print(f"Dionaea parsed at {datetime.now()}")
+=======
+def _dionaea_event_type(protocol: str | None) -> str:
+    """Map a Dionaea connection protocol to a dashboard event_type."""
+    key = (protocol or "").strip().lower()
+    return DIONAEA_PROTOCOL_MAP.get(key, key or "dionaea_conn")
+
+
+def parse_dionaea() -> None:
+    """Parse the Dionaea log_json output into the shared schema.
+
+    One JSON object is emitted per connection (on free). Maps to:
+      - attacks: one row per inbound connection (event_type = service name)
+      - attacks: one login_failed row per captured credential pair
+      - commands: one row per FTP command
+    """
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    inserted = 0
+
+    for line in _iter_new_lines(c, DIONAEA_LOG):
+        try:
+            entry = json.loads(line)
+            connection = entry.get("connection") or {}
+            conn_type = (connection.get("type") or "").lower()
+            if conn_type not in DIONAEA_INBOUND_TYPES:
+                continue
+
+            src_ip = entry.get("src_ip")
+            if not src_ip:
+                continue
+            src_port = entry.get("src_port")
+            ts = entry.get("timestamp")
+            event_type = _dionaea_event_type(connection.get("protocol"))
+
+            c.execute(
+                """INSERT OR IGNORE INTO attacks
+                (timestamp, src_ip, src_port, username, password, success, event_type, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (ts, src_ip, src_port, None, None, None, event_type, "dionaea"),
+            )
+            if c.rowcount:
+                inserted += 1
+
+            for cred in entry.get("credentials") or []:
+                username = cred.get("username")
+                password = cred.get("password")
+                if username is None and password is None:
+                    continue
+                c.execute(
+                    """INSERT OR IGNORE INTO attacks
+                    (timestamp, src_ip, src_port, username, password, success, event_type, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (ts, src_ip, src_port, username, password, 0, "login_failed", "dionaea"),
+                )
+                if c.rowcount:
+                    inserted += 1
+
+            ftp = entry.get("ftp") or {}
+            for cmd in ftp.get("commands") or []:
+                command = cmd.get("command")
+                if not command:
+                    continue
+                arguments = cmd.get("arguments")
+                full = command if not arguments else f"{command} {arguments}"
+                c.execute(
+                    """INSERT OR IGNORE INTO commands (timestamp, src_ip, command)
+                    VALUES (?, ?, ?)""",
+                    (ts, src_ip, full),
+                )
+                if c.rowcount:
+                    inserted += 1
+        except (json.JSONDecodeError, TypeError, sqlite3.Error):
+            continue
+
+    conn.commit()
+    conn.close()
+    print(f"Dionaea: {inserted} new rows at {datetime.now()}")
+>>>>>>> Stashed changes
 
 
 def parse_opencanary() -> None:

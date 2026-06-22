@@ -62,8 +62,20 @@ _EVENT_LABELS = {
     "mssql": ("MSSQL", "#db2777"),
     "sip": ("SIP", "#059669"),
     "vnc": ("VNC", "#dc2626"),
+    "smb": ("SMB", "#9333ea"),
+    "epmap": ("EPMAP / RPC", "#7c3aed"),
+    "mqtt": ("MQTT", "#0ea5e9"),
+    "tftp": ("TFTP", "#14b8a6"),
+    "upnp": ("UPnP", "#f97316"),
+    "mongodb": ("MongoDB", "#22c55e"),
+    "memcache": ("Memcached", "#a16207"),
+    "pptp": ("PPTP", "#6366f1"),
+    "blackhole": ("Blackhole", "#475569"),
 }
 _DEFAULT_EVENT = ("Other", "#64748b")
+
+# Honeypot sources always offered in the log filter, even with no rows yet.
+_KNOWN_SOURCES = {"cowrie", "dionaea", "opencanary"}
 _PORT_COLORS = (
     "#0d9488",
     "#4f46e5",
@@ -578,13 +590,19 @@ def get_recent(limit: int = 8, period: str = "24h") -> list[dict]:
 
 @_cached
 def get_log_sources() -> list[str]:
-    """Distinct ``source`` values present in the DB (for the filter dropdown)."""
+    """Source values for the filter dropdown.
+
+    Always offers the known honeypot sources (so e.g. ``dionaea`` can be
+    selected before its first events arrive) merged with any other distinct
+    ``source`` values already present in the DB.
+    """
     with _connect() as conn:
         rows = conn.execute(
             "SELECT DISTINCT source FROM attacks "
-            "WHERE source IS NOT NULL AND source <> '' ORDER BY source"
+            "WHERE source IS NOT NULL AND source <> ''"
         ).fetchall()
-    return [r[0] for r in rows]
+    sources = _KNOWN_SOURCES | {r[0] for r in rows}
+    return sorted(sources)
 
 
 @_cached

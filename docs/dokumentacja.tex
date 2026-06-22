@@ -1,0 +1,1469 @@
+% =====================================================================
+%  Dokumentacja projektowa: HoneyWatch
+%  Honeypot z analitycznym panelem monitorowania ataków sieciowych
+%
+%  Kompilacja:  pdflatex dokumentacja.tex  (dwukrotnie, dla spisu treści)
+%  Wymaga: babel(polish), tikz, listings, hyperref, booktabs, geometry
+% =====================================================================
+\documentclass[12pt,a4paper]{report}
+
+% ---------- Kodowanie i język ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+\usepackage{lmodern}
+
+% ---------- Układ strony ----------
+\usepackage[a4paper,left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+
+% ---------- Grafika i kolory ----------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\definecolor{honey}{HTML}{F59E0B}
+\definecolor{honeydark}{HTML}{B45309}
+\definecolor{bgdark}{HTML}{1F2937}
+\definecolor{codebg}{HTML}{F6F8FA}
+\definecolor{codecomment}{HTML}{6A737D}
+\definecolor{codekw}{HTML}{B45309}
+\definecolor{codestr}{HTML}{0A7D2C}
+\definecolor{linegray}{HTML}{9CA3AF}
+
+% ---------- Tabele ----------
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{multirow}
+
+% ---------- Listy ----------
+\usepackage{enumitem}
+\setlist{itemsep=2pt,topsep=3pt}
+
+% ---------- Nagłówki/stopki ----------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\itshape HoneyWatch}
+\fancyhead[R]{\small\itshape Dokumentacja projektowa}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% ---------- Podpisy rysunków/tabel ----------
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf,labelsep=period}
+
+% ---------- TikZ ----------
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric,arrows.meta,positioning,fit,backgrounds,calc,shadows.blur}
+
+% Style wspólne dla diagramów
+\tikzset{
+  block/.style={rectangle, rounded corners=3pt, draw=honeydark, thick,
+                fill=honey!12, text width=3.2cm, align=center, minimum height=1.0cm,
+                font=\small},
+  store/.style={cylinder, shape border rotate=90, draw=honeydark, thick,
+                fill=honey!20, aspect=0.3, minimum height=1.4cm, minimum width=2.6cm,
+                align=center, font=\small},
+  ext/.style={rectangle, draw=linegray, thick, fill=gray!8, text width=3.0cm,
+              align=center, minimum height=0.9cm, font=\small},
+  flow/.style={-{Stealth[length=3mm]}, thick, draw=honeydark},
+  flowback/.style={-{Stealth[length=3mm]}, thick, draw=linegray, dashed},
+  uclass/.style={rectangle, draw=honeydark, thick, fill=white, align=left,
+                 font=\footnotesize, text width=4.4cm},
+  actor/.style={font=\small, align=center},
+  usecase/.style={ellipse, draw=honeydark, thick, fill=honey!12, align=center,
+                  font=\footnotesize, minimum width=3.2cm, minimum height=1.0cm},
+  lifeline/.style={rectangle, draw=honeydark, thick, fill=honey!12, align=center,
+                   font=\footnotesize, minimum height=0.8cm, text width=2.4cm},
+}
+
+% ---------- Listingi kodu ----------
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  commentstyle=\color{codecomment}\itshape,
+  keywordstyle=\color{codekw}\bfseries,
+  stringstyle=\color{codestr},
+  numberstyle=\tiny\color{linegray},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{linegray!60},
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  tabsize=2,
+  captionpos=b,
+  extendedchars=true,
+  inputencoding=utf8,
+  literate=%
+    {ą}{{\k a}}1 {ć}{{\'c}}1 {ę}{{\k e}}1 {ł}{{\l}}1 {ń}{{\'n}}1
+    {ó}{{\'o}}1 {ś}{{\'s}}1 {ź}{{\'z}}1 {ż}{{\.z}}1
+    {Ą}{{\k A}}1 {Ć}{{\'C}}1 {Ę}{{\k E}}1 {Ł}{{\L}}1 {Ń}{{\'N}}1
+    {Ó}{{\'O}}1 {Ś}{{\'S}}1 {Ź}{{\'Z}}1 {Ż}{{\.Z}}1
+}
+\lstdefinestyle{py}{language=Python}
+\lstdefinestyle{sqlstyle}{language=SQL,morekeywords={AUTOINCREMENT,TEXT,INTEGER,DATETIME,UNIQUE}}
+\lstdefinestyle{bashstyle}{language=bash}
+
+% ---------- Hyperref (na końcu) ----------
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+  pdftitle={Dokumentacja projektowa HoneyWatch},
+  pdfauthor={Mateusz Rup, Jakub Gwizdala},
+  colorlinks=true,
+  linkcolor=honeydark,
+  urlcolor=honeydark,
+  citecolor=honeydark
+}
+
+% ---------- Makro: zastępczy zrzut ekranu ----------
+% Aby wstawić rzeczywisty zrzut, zamień \zrzut{...}{...} na:
+%   \includegraphics[width=\textwidth]{screenshots/plik.png}
+\newcommand{\zrzut}[2]{%
+  \begin{tikzpicture}
+    \path[draw=linegray, fill=gray!6, rounded corners=4pt]
+      (0,0) rectangle (\linewidth,#1)
+      node[midway, align=center, text=linegray, font=\small, text width=0.85\linewidth]
+      {[ Miejsce na zrzut ekranu ]\\[2pt]\itshape #2};
+  \end{tikzpicture}%
+}
+
+\begin{document}
+
+% =====================================================================
+%  STRONA TYTUŁOWA
+% =====================================================================
+\begin{titlepage}
+\centering
+\thispagestyle{empty}
+
+{\large Politechnika --- Wydział Informatyki\par}
+\vspace{0.4cm}
+{\large Kierunek: Informatyka\par}
+
+\vfill
+
+\begin{tikzpicture}
+  \node[regular polygon, regular polygon sides=6, draw=honeydark, line width=2pt,
+        fill=honey!25, minimum size=2.6cm] (hex) {};
+  \node at (hex.center) {\Huge\bfseries\color{honeydark} HW};
+\end{tikzpicture}
+
+\vspace{0.8cm}
+
+{\Huge\bfseries HoneyWatch\par}
+\vspace{0.4cm}
+{\Large Honeypot z analitycznym panelem\\ monitorowania ataków sieciowych\par}
+
+\vspace{0.6cm}
+{\large\itshape Dokumentacja techniczna i użytkowa projektu programistycznego\par}
+
+\vfill
+
+\begin{tabular}{rl}
+\textbf{Autorzy:} & Mateusz Rup \\
+                  & Jakub Gwizdała \\[6pt]
+\textbf{Typ projektu:} & Projekt programistyczny \\[6pt]
+\textbf{Repozytorium:} & \texttt{github.com/HoneyWatch/HoneyWatchApp} \\
+\end{tabular}
+
+\vspace{1.0cm}
+{\large \today\par}
+
+\vfill
+\end{titlepage}
+
+% =====================================================================
+%  SPIS TREŚCI
+% =====================================================================
+\pagenumbering{roman}
+\setcounter{page}{1}
+\tableofcontents
+\listoffigures
+\cleardoublepage
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+% =====================================================================
+%  ROZDZIAŁ 1 — OPIS PROBLEMU
+% =====================================================================
+\chapter{Opis rozwiązywanego problemu}
+\label{ch:problem}
+
+\section{Cel projektu}
+
+Celem projektu \textbf{HoneyWatch} było zaprojektowanie, zaimplementowanie oraz
+wdrożenie kompletnego systemu typu \emph{honeypot} (pułapka sieciowa) wraz
+z dedykowanym, analitycznym panelem (ang. \emph{dashboard}) służącym do
+monitorowania i wizualizacji rzeczywistych ataków sieciowych prowadzonych przez
+zautomatyzowane boty oraz ludzkich napastników.
+
+W odróżnieniu od typowych projektów akademickich, w których dane są generowane
+sztucznie lub pobierane z gotowych zbiorów, HoneyWatch zbiera dane
+\emph{na żywo} --- system został wystawiony na publiczny adres IP serwera VPS
+i przez cały okres działania rejestrował realne próby włamań. Dzięki temu projekt
+łączy trzy obszary:
+
+\begin{enumerate}
+  \item \textbf{Infrastrukturę bezpieczeństwa} --- uruchomienie i konfigurację
+        honeypotów emulujących usługi sieciowe (SSH, Telnet, FTP, HTTP, bazy
+        danych i inne).
+  \item \textbf{Inżynierię danych} --- parser logów przekształcający surowe
+        zdarzenia w ustrukturyzowaną bazę danych, wzbogaconą o geolokalizację
+        adresów IP.
+  \item \textbf{Wizualizację i analizę} --- aplikację webową prezentującą dane
+        w czasie zbliżonym do rzeczywistego: interaktywną mapę świata, wykresy,
+        mapę cieplną aktywności oraz przeszukiwalną tabelę zdarzeń.
+\end{enumerate}
+
+Mówiąc krótko, chcieliśmy zbudować narzędzie, które odpowiada na pytanie:
+\emph{,,kto, skąd, kiedy i w jaki sposób atakuje serwer wystawiony do
+Internetu?''} --- i które prezentuje tę odpowiedź w sposób czytelny zarówno dla
+specjalisty, jak i dla osoby niezwiązanej z bezpieczeństwem IT.
+
+\section{Motywacja}
+
+Każdy serwer udostępniony publicznie w Internecie jest niemal natychmiast
+celem zautomatyzowanego skanowania i prób logowania. Dzieje się to w sposób
+ciągły i masowy, jednak dla administratora zjawisko to pozostaje zwykle ukryte
+w surowych, trudnych do interpretacji plikach logów. Motywacją do podjęcia
+tematu była chęć:
+
+\begin{itemize}
+  \item \textbf{zobaczenia skali zjawiska na własne oczy} --- przekonania się,
+        jak szybko i jak intensywnie ,,świeży'' serwer staje się celem ataków;
+  \item \textbf{poznania technik napastników} --- jakie nazwy użytkowników
+        i hasła są najczęściej próbowane, jakie usługi są skanowane, jakie
+        polecenia wykonują napastnicy po uzyskaniu dostępu;
+  \item \textbf{nauki praktycznego bezpieczeństwa} --- konfiguracji honeypotów,
+        bezpiecznej izolacji usług oraz rejestrowania incydentów;
+  \item \textbf{zbudowania użytecznego narzędzia} --- które przekształca ,,szum''
+        z logów w wiedzę dającą się przedstawić wizualnie i wykorzystać do
+        wyciągania wniosków obronnych.
+\end{itemize}
+
+Honeypot jest do tego celu narzędziem idealnym: jest to system, który
+\emph{celowo} udaje podatną, wartościową maszynę, aby zwabić napastnika.
+Ponieważ żaden legalny użytkownik nie ma powodu, by się do niego łączyć,
+\textbf{każde} zarejestrowane połączenie można z dużym prawdopodobieństwem uznać
+za wrogie. Eliminuje to fundamentalny problem klasycznych systemów wykrywania
+włamań --- konieczność odróżniania ruchu legalnego od złośliwego.
+
+\section{Czym jest honeypot}
+
+\emph{Honeypot} to celowo wystawiona ,,przynęta'' --- usługa lub cały system
+udający atrakcyjny cel (np. serwer SSH ze słabym hasłem), którego jedynym
+zadaniem jest zwabienie napastnika i szczegółowe zarejestrowanie jego działań.
+Wyróżnia się m.in. honeypoty:
+
+\begin{itemize}
+  \item \textbf{niskointeraktywne} --- emulujące jedynie wybrane elementy usługi
+        (np. baner i ekran logowania), bezpieczne, lecz dostarczające mniej
+        szczegółów;
+  \item \textbf{wysokointeraktywne} --- udostępniające napastnikowi (pozornie)
+        pełne środowisko, dające więcej danych kosztem większego ryzyka.
+\end{itemize}
+
+W projekcie wykorzystaliśmy dwa honeypoty o charakterze średnio-interaktywnym:
+\textbf{Cowrie} (emulacja powłoki SSH/Telnet z rejestracją prób logowania
+i wpisywanych poleceń) oraz \textbf{OpenCanary} (zestaw emulowanych usług na
+wielu portach: HTTP, FTP, MySQL, RDP, VNC i innych). Dzięki ich połączeniu
+rejestrujemy zarówno ataki na powłokę systemową, jak i skanowanie pozostałych
+popularnych usług.
+
+\section{Aktualność, oryginalność i użyteczność}
+
+\textbf{Aktualność.} Bezpieczeństwo systemów wystawionych do Internetu jest
+tematem nieustannie aktualnym. Skala zautomatyzowanych ataków rośnie wraz
+z rozwojem botnetów, a analiza danych o atakach (\emph{threat intelligence})
+stanowi jeden z filarów współczesnej obrony. Projekt dotyka więc realnego,
+wciąż istotnego problemu.
+
+\textbf{Oryginalność.} Choć istnieją gotowe, rozbudowane platformy do agregacji
+danych z honeypotów (np. T-Pot, DShield), są to rozwiązania ciężkie, złożone
+w konfiguracji i często ,,przeładowane'' funkcjami. Oryginalnym wkładem naszego
+zespołu jest \textbf{lekki, samodzielnie napisany} potok przetwarzania danych
+oraz dedykowany panel analityczny:
+
+\begin{itemize}
+  \item parser logów napisany od podstaw, bez zewnętrznych zależności
+        (wyłącznie biblioteka standardowa Pythona), z mechanizmem
+        \emph{przyrostowego} czytania logów i odporną na duplikaty zapisem;
+  \item warstwa dostępu do danych odporna na różne formaty znaczników czasu
+        i działająca identycznie na serwerze produkcyjnym oraz na komputerze
+        deweloperskim;
+  \item interfejs użytkownika zaprojektowany z naciskiem na czytelność ---
+        ciemny motyw, interaktywna mapa, spójna kolorystyka i czytelne
+        wskaźniki zmian.
+\end{itemize}
+
+\textbf{Użyteczność.} System dostarcza konkretną wartość: pozwala w kilka sekund
+ocenić, z jakich krajów pochodzi najwięcej ataków, jakie poświadczenia są
+najczęściej próbowane oraz w jakich godzinach aktywność jest największa. Tak
+przetworzone dane mogą posłużyć do wzmocnienia rzeczywistych systemów (np.
+blokowania określonych podsieci, wymuszania silnych haseł, ograniczania dostępu
+do usług administracyjnych).
+
+\section{Zakres i struktura dokumentu}
+
+Niniejsza dokumentacja opisuje cały cykl życia projektu. W rozdziale
+\ref{ch:tech} przedstawiono wykorzystane technologie. Rozdział \ref{ch:arch}
+omawia architekturę systemu, model danych oraz kluczowe algorytmy i decyzje
+projektowe, ilustrując je diagramami (blokowym, przypadków użycia, klas oraz
+sekwencji). Rozdział \ref{ch:func} szczegółowo opisuje funkcjonalność z punktu
+widzenia użytkownika, a rozdział \ref{ch:demo} prezentuje konkretne scenariusze
+użycia wraz z wynikami. Rozdział \ref{ch:team} omawia organizację pracy zespołu,
+a rozdział \ref{ch:summary} zawiera podsumowanie, wnioski, ograniczenia oraz
+propozycje dalszego rozwoju. Dokument zamykają bibliografia oraz załącznik
+z kodem źródłowym.
+
+% =====================================================================
+%  ROZDZIAŁ 2 — WYKORZYSTANE TECHNOLOGIE
+% =====================================================================
+\chapter{Wykorzystane technologie}
+\label{ch:tech}
+
+Zgodnie z zasadą, że dokumentacja powinna skupiać się na oryginalnym wkładzie
+zespołu, w tym rozdziale ograniczamy się do wymienienia użytych narzędzi wraz
+z krótkim uzasadnieniem wyboru. Szczegóły działania poszczególnych bibliotek
+znajdują się w ich oficjalnej dokumentacji, do której odwołujemy się
+w bibliografii.
+
+\section{Zestawienie technologii}
+
+\begin{longtable}{>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{7.2cm}}
+\toprule
+\textbf{Warstwa} & \textbf{Technologia} & \textbf{Rola w projekcie} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Warstwa} & \textbf{Technologia} & \textbf{Rola w projekcie} \\
+\midrule
+\endhead
+\bottomrule
+\endfoot
+Honeypoty & Cowrie & Emulacja powłoki SSH/Telnet; rejestracja prób logowania oraz poleceń. \\
+          & OpenCanary & Emulacja wielu usług (HTTP, FTP, MySQL, RDP, VNC, SIP, MSSQL). \\
+\midrule
+Język & Python 3.10+ & Język parsera oraz aplikacji serwerowej. \\
+\midrule
+Parser & Biblioteka standardowa & \texttt{sqlite3}, \texttt{json}, \texttt{urllib}, \texttt{ipaddress}, \texttt{datetime} --- brak zależności zewnętrznych. \\
+\midrule
+Baza danych & SQLite & Lekka, plikowa baza relacyjna; jeden plik \texttt{honeywatch.db}. \\
+\midrule
+Backend WWW & Flask 3.x & Routing, renderowanie szablonów Jinja2, endpointy JSON. \\
+\midrule
+Frontend & HTML5 / CSS3 & Ciemny motyw, układ siatkowy (CSS Grid/Flexbox). \\
+         & JavaScript (vanilla) & Pobieranie danych (\texttt{fetch}), renderowanie wizualizacji. \\
+         & Chart.js 4.4 & Wykresy: liniowy, słupkowy, pierścieniowy. \\
+         & Leaflet 1.9 & Interaktywna mapa świata z kafelkami CARTO Dark Matter. \\
+\midrule
+Geolokalizacja & ip-api.com & Wsadowe zapytania IP $\rightarrow$ kraj, szer./dł. geogr. \\
+\midrule
+Wdrożenie & Linux VPS & Serwer produkcyjny z publicznym adresem IP. \\
+          & systemd & Usługa utrzymująca panel w działaniu. \\
+          & cron & Cykliczne uruchamianie parsera (co minutę). \\
+          & Bash & Skrypt instalacyjny \texttt{install-vps.sh}. \\
+\midrule
+Narzędzia & Git / GitHub & Kontrola wersji, współpraca, przegląd kodu (Pull Requests). \\
+\end{longtable}
+
+\section{Uzasadnienie kluczowych wyborów}
+
+\begin{description}[leftmargin=0pt,style=nextline]
+  \item[Cowrie i OpenCanary] Oba honeypoty są dojrzałe, dobrze udokumentowane
+        i zapisują logi w formacie JSON, co znacznie upraszcza parsowanie.
+        Cowrie specjalizuje się w SSH/Telnet, natomiast OpenCanary uzupełnia go
+        o szeroki wachlarz innych usług --- razem dają pełny obraz aktywności.
+  \item[Python + biblioteka standardowa] Parser celowo nie korzysta z bibliotek
+        zewnętrznych (np. \texttt{requests}). Dzięki temu jego wdrożenie sprowadza
+        się do skopiowania jednego pliku, bez instalowania zależności --- co jest
+        istotne na minimalnym serwerze VPS.
+  \item[SQLite] Dla skali tego projektu (pojedynczy serwer, dane rzędu tysięcy
+        zdarzeń) plikowa baza SQLite jest w pełni wystarczająca, nie wymaga
+        osobnego procesu serwera bazodanowego i ułatwia przenoszenie danych.
+  \item[Flask] Minimalistyczny mikroframework, który nie narzuca struktury
+        i pozwala szybko zbudować zarówno stronę HTML, jak i lekkie API JSON.
+  \item[Chart.js i Leaflet] Sprawdzone, dojrzałe biblioteki frontendowe
+        ładowane z sieci CDN, co odciąża serwer i nie wymaga procesu budowania
+        (brak \texttt{npm}, brak kroku kompilacji).
+\end{description}
+
+% =====================================================================
+%  ROZDZIAŁ 3 — ARCHITEKTURA I BUDOWA SYSTEMU
+% =====================================================================
+\chapter{Architektura i budowa systemu}
+\label{ch:arch}
+
+\section{Architektura ogólna}
+
+System HoneyWatch ma architekturę \textbf{potoku przetwarzania danych}
+(\emph{data pipeline}) złożoną z czterech głównych etapów: przechwytywania,
+parsowania, składowania oraz prezentacji. Wszystkie komponenty działają na
+jednym serwerze VPS, dzięki czemu dane nie muszą być przesyłane między
+maszynami. Kluczową decyzją architektoniczną było to, że \textbf{panel czyta
+plik bazy SQLite bezpośrednio}, w tym samym miejscu, w którym zapisuje go
+parser --- eliminuje to potrzebę budowania pośredniej warstwy API między
+parserem a panelem oraz ręcznego kopiowania bazy w środowisku produkcyjnym.
+
+Schemat blokowy na rys.~\ref{fig:arch} przedstawia komponenty systemu oraz
+kierunek przepływu danych.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=1.0cm and 1.4cm]
+  \node[ext] (att) {Napastnik / bot\\(Internet)};
+  \node[block, below=of att] (hp) {Honeypoty\\\textbf{Cowrie} + \textbf{OpenCanary}};
+  \node[store, below=of hp] (logs) {Pliki logów\\(JSON)};
+  \node[block, below=of logs] (parser) {Parser\\\texttt{parser.py}\\(cron, co minutę)};
+  \node[store, below=of parser] (db) {Baza danych\\\texttt{honeywatch.db}\\(SQLite)};
+  \node[block, right=2.6cm of db] (flask) {Aplikacja Flask\\\texttt{dashboard}\\(systemd)};
+  \node[ext, right=2.6cm of parser] (geo) {API geolokalizacji\\ip-api.com};
+  \node[block, above=of flask] (geomod) {Moduł geoip\\+ cache JSON};
+  \node[ext, above=of geomod] (browser) {Przeglądarka\\(klient)};
+
+  \draw[flow] (att) -- node[right,font=\scriptsize] {ataki} (hp);
+  \draw[flow] (hp) -- node[right,font=\scriptsize] {zapis} (logs);
+  \draw[flow] (logs) -- node[right,font=\scriptsize] {odczyt przyrostowy} (parser);
+  \draw[flow] (parser) -- node[right,font=\scriptsize] {INSERT OR IGNORE} (db);
+  \draw[flow] (db) -- node[above,font=\scriptsize] {SELECT} (flask);
+  \draw[flow] (flask) -- (geomod);
+  \draw[flow] (geomod) -- node[left,font=\scriptsize] {nieznane IP} (geo);
+  \draw[flow] (geomod) -- node[right,font=\scriptsize] {JSON / HTML} (browser);
+\end{tikzpicture}
+\caption{Architektura ogólna systemu HoneyWatch --- potok przetwarzania danych
+od napastnika do przeglądarki.}
+\label{fig:arch}
+\end{figure}
+
+\section{Przepływ danych}
+
+Pełny cykl życia pojedynczego zdarzenia przebiega następująco:
+
+\begin{enumerate}
+  \item \textbf{Przechwycenie.} Napastnik (najczęściej zautomatyzowany bot)
+        łączy się z serwerem na jednym z monitorowanych portów. Honeypot
+        odpowiada, udając prawdziwą usługę, i zapisuje zdarzenie do pliku logu
+        w formacie JSON (jedno zdarzenie = jedna linia).
+  \item \textbf{Parsowanie.} Uruchamiany cyklicznie przez \texttt{cron} parser
+        czyta \emph{tylko nowe} fragmenty logów (na podstawie zapamiętanego
+        przesunięcia bajtowego), mapuje każde zdarzenie na model danych
+        i zapisuje je do bazy z pominięciem duplikatów.
+  \item \textbf{Składowanie.} Dane trafiają do relacyjnej bazy SQLite
+        w czterech tabelach (zob. \ref{sec:schema}).
+  \item \textbf{Wzbogacanie.} Przy obsłudze żądania panel pobiera unikalne
+        adresy IP i ustala ich położenie geograficzne; wyniki są trwale
+        zapisywane w pamięci podręcznej, aby ograniczyć liczbę zapytań do
+        zewnętrznego API.
+  \item \textbf{Prezentacja.} Aplikacja Flask agreguje dane (SQL) i zwraca je
+        jako HTML (pierwsze załadowanie strony) oraz JSON (dynamiczne wykresy
+        i mapa). Przeglądarka renderuje wizualizacje.
+\end{enumerate}
+
+\section{Diagram przypadków użycia}
+
+Z perspektywy użytkownika system udostępnia zestaw funkcji analitycznych
+skupionych wokół jednego panelu. Aktorami są \textbf{Analityk} (główny
+użytkownik panelu) oraz dwa aktory systemowe: \textbf{Napastnik} (generujący
+dane) i zewnętrzne \textbf{API geolokalizacji}. Rysunek \ref{fig:usecase}
+przedstawia diagram przypadków użycia.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=0.55cm]
+  % Aktor: analityk
+  \node[actor] (analyst) at (0,0) {%
+    \begin{tikzpicture}[scale=0.5]
+      \draw[thick] (0,0) circle (0.5);
+      \draw[thick] (0,-0.5) -- (0,-1.8);
+      \draw[thick] (-0.8,-1.0) -- (0.8,-1.0);
+      \draw[thick] (0,-1.8) -- (-0.6,-2.6);
+      \draw[thick] (0,-1.8) -- (0.6,-2.6);
+    \end{tikzpicture}\\ \textbf{Analityk}};
+
+  % Aktor: napastnik
+  \node[actor] (attacker) at (13,1.5) {%
+    \begin{tikzpicture}[scale=0.5]
+      \draw[thick] (0,0) circle (0.5);
+      \draw[thick] (0,-0.5) -- (0,-1.8);
+      \draw[thick] (-0.8,-1.0) -- (0.8,-1.0);
+      \draw[thick] (0,-1.8) -- (-0.6,-2.6);
+      \draw[thick] (0,-1.8) -- (0.6,-2.6);
+    \end{tikzpicture}\\ \textbf{Napastnik}};
+
+  % Aktor: API
+  \node[actor] (api) at (13,-4.5) {%
+    \begin{tikzpicture}[scale=0.5]
+      \draw[thick] (0,0) circle (0.5);
+      \draw[thick] (0,-0.5) -- (0,-1.8);
+      \draw[thick] (-0.8,-1.0) -- (0.8,-1.0);
+      \draw[thick] (0,-1.8) -- (-0.6,-2.6);
+      \draw[thick] (0,-1.8) -- (0.6,-2.6);
+    \end{tikzpicture}\\ \textbf{API geolokalizacji}};
+
+  % System boundary
+  \begin{scope}[on background layer]
+    \node[draw=honeydark, thick, rounded corners, fill=honey!4,
+          minimum width=7.2cm, minimum height=8.6cm, label={[font=\small\bfseries]north:System HoneyWatch}]
+          (sys) at (6.5,-1.5) {};
+  \end{scope}
+
+  \node[usecase] (uc1) at (6.5,1.3) {Przegląd wskaźników\\KPI};
+  \node[usecase] (uc2) at (6.5,0.0) {Analiza mapy\\ataków};
+  \node[usecase] (uc3) at (6.5,-1.3) {Przegląd wykresów\\i statystyk};
+  \node[usecase] (uc4) at (6.5,-2.6) {Analiza\\poświadczeń};
+  \node[usecase] (uc5) at (6.5,-3.9) {Przeszukiwanie\\logów};
+  \node[usecase] (uc6) at (6.5,-5.2) {Zmiana zakresu\\czasu};
+
+  \foreach \u in {uc1,uc2,uc3,uc4,uc5,uc6} {
+    \draw[thick] (analyst) -- (\u);
+  }
+  \draw[thick] (attacker) -- node[above,sloped,font=\scriptsize]{generuje dane} (uc2);
+  \draw[thick,dashed,-{Stealth}] (uc2) -- node[below,sloped,font=\scriptsize]{$\langle\langle$include$\rangle\rangle$} (api);
+\end{tikzpicture}
+\caption{Diagram przypadków użycia systemu HoneyWatch.}
+\label{fig:usecase}
+\end{figure}
+
+\section{Model danych i schemat bazy}
+\label{sec:schema}
+
+Baza danych SQLite składa się z czterech tabel. Centralną encją jest tabela
+\texttt{attacks}, do której odwołują się tabele szczegółowe \texttt{commands}
+(polecenia powłoki) oraz \texttt{http\_attacks} (szczegóły żądań HTTP). Tabela
+\texttt{parser\_state} przechowuje stan parsera (przesunięcia bajtowe).
+Rysunek \ref{fig:erd} przedstawia uproszczony diagram związków encji.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=1.2cm and 1.8cm]
+  \node[uclass] (attacks) {%
+    \textbf{attacks}\\\hrule\vspace{2pt}
+    \underline{id} : INTEGER PK\\
+    timestamp : TEXT\\
+    src\_ip : TEXT\\
+    src\_port : INTEGER\\
+    username : TEXT\\
+    password : TEXT\\
+    success : INTEGER\\
+    event\_type : TEXT\\
+    source : TEXT};
+
+  \node[uclass, right=of attacks] (commands) {%
+    \textbf{commands}\\\hrule\vspace{2pt}
+    \underline{id} : INTEGER PK\\
+    attack\_id : INTEGER FK\\
+    timestamp : TEXT\\
+    src\_ip : TEXT\\
+    command : TEXT};
+
+  \node[uclass, below=of commands] (http) {%
+    \textbf{http\_attacks}\\\hrule\vspace{2pt}
+    \underline{id} : INTEGER PK\\
+    attack\_id : INTEGER FK\\
+    timestamp : TEXT\\
+    src\_ip : TEXT\\
+    method : TEXT\\
+    path : TEXT\\
+    attack\_type : TEXT};
+
+  \node[uclass, below=of attacks] (state) {%
+    \textbf{parser\_state}\\\hrule\vspace{2pt}
+    \underline{log\_path} : TEXT PK\\
+    byte\_offset : INTEGER};
+
+  \draw[flow] (commands) -- node[above,font=\scriptsize]{1..*} (attacks);
+  \draw[flow] (http) -- node[below,font=\scriptsize]{1..*} (attacks);
+\end{tikzpicture}
+\caption{Diagram związków encji bazy danych \texttt{honeywatch.db}.}
+\label{fig:erd}
+\end{figure}
+
+Definicję tabel realizuje funkcja \texttt{init\_db()} (listing \ref{lst:schema}).
+
+\begin{lstlisting}[style=sqlstyle,caption={Definicja schematu bazy danych (fragment).},label={lst:schema}]
+CREATE TABLE IF NOT EXISTS attacks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT,
+    src_ip      TEXT,
+    src_port    INTEGER,
+    username    TEXT,
+    password    TEXT,
+    success     INTEGER,   -- 0 = nieudane, 1 = udane, NULL = nie dotyczy
+    event_type  TEXT,      -- connect | login_failed | login_success | http_probe | ftp | ...
+    source      TEXT       -- cowrie | opencanary
+);
+
+CREATE TABLE IF NOT EXISTS parser_state (
+    log_path    TEXT PRIMARY KEY,
+    byte_offset INTEGER NOT NULL DEFAULT 0
+);
+\end{lstlisting}
+
+Znaczenie najważniejszych kolumn tabeli \texttt{attacks} przedstawia
+tabela \ref{tab:cols}.
+
+\begin{table}[ht]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\ttfamily}l X}
+\toprule
+\textnormal{\textbf{Kolumna}} & \textbf{Znaczenie} \\
+\midrule
+timestamp & Znacznik czasu zdarzenia (ISO-8601 lub epoka uniksowa). \\
+src\_ip & Adres IP źródła ataku --- klucz do geolokalizacji. \\
+src\_port & Port źródłowy połączenia. \\
+username / password & Próbowane poświadczenia (dla zdarzeń logowania). \\
+success & Wynik próby logowania (0/1/NULL). \\
+event\_type & Typ zdarzenia, np. \texttt{connect}, \texttt{login\_failed}, \texttt{http\_probe}, \texttt{ftp}, \texttt{mysql}, \texttt{rdp}. \\
+source & Honeypot będący źródłem zdarzenia (\texttt{cowrie}/\texttt{opencanary}). \\
+\bottomrule
+\end{tabularx}
+\caption{Opis kolumn centralnej tabeli \texttt{attacks}.}
+\label{tab:cols}
+\end{table}
+
+\section{Diagram klas / komponentów}
+
+Logika aplikacji jest podzielona na spójne moduły o jasno określonej
+odpowiedzialności. Rysunek \ref{fig:class} przedstawia uproszczony diagram
+najważniejszych modułów i ich powiązań.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[node distance=1.0cm and 1.0cm]
+  \node[uclass, text width=4.6cm] (app) {%
+    \textbf{dashboard.app} \emph{(Flask)}\\\hrule\vspace{2pt}
+    + overview()\\
+    + api\_summary()\\
+    + api\_geo() / api\_timeline()\\
+    + api\_event\_types()\\
+    + api\_top\_usernames/passwords()\\
+    + api\_heatmap() / api\_recent()\\
+    + api\_logs()\\
+    -- \_range()};
+
+  \node[uclass, text width=4.6cm, right=of app] (db) {%
+    \textbf{dashboard.db} \emph{(dostęp do danych)}\\\hrule\vspace{2pt}
+    + get\_summary()\\
+    + get\_top\_countries()\\
+    + get\_geo() / get\_timeline()\\
+    + get\_event\_types()\\
+    + get\_heatmap() / get\_recent()\\
+    + get\_logs()\\
+    -- \_window\_sql() / \_ts\_mod()\\
+    -- \_country\_aggregate()};
+
+  \node[uclass, text width=4.6cm, below=of db] (geoip) {%
+    \textbf{dashboard.geoip}\\\hrule\vspace{2pt}
+    + locate(ips)\\
+    + flag(code)\\
+    -- \_fetch\_batch()\\
+    -- \_load\_cache() / \_save\_cache()\\
+    -- \_is\_public()};
+
+  \node[uclass, text width=4.6cm, below=of app] (iso) {%
+    \textbf{dashboard.iso\_codes}\\\hrule\vspace{2pt}
+    + to\_iso3(alpha2)};
+
+  \node[uclass, text width=4.6cm, left=of iso] (parser) {%
+    \textbf{deploy.parser}\\\hrule\vspace{2pt}
+    + init\_db()\\
+    + parse\_cowrie()\\
+    + parse\_opencanary()\\
+    -- \_iter\_new\_lines()\\
+    -- \_get/\_set\_offset()};
+
+  \draw[flow] (app) -- node[above,font=\scriptsize]{wywołuje} (db);
+  \draw[flow] (db) -- node[right,font=\scriptsize]{używa} (geoip);
+  \draw[flow] (db) -- node[left,font=\scriptsize]{ISO3} (iso);
+  \draw[flow] (parser) -- node[below,sloped,font=\scriptsize]{zapisuje DB} (db);
+\end{tikzpicture}
+\caption{Diagram głównych modułów systemu i ich zależności.}
+\label{fig:class}
+\end{figure}
+
+\subsection{Opis modułów}
+
+\begin{description}[leftmargin=0pt,style=nextline]
+  \item[\texttt{deploy/parser.py}] Niezależny skrypt zbierający dane.
+        Inicjalizuje bazę, czyta przyrostowo logi Cowrie i OpenCanary, mapuje
+        zdarzenia na wiersze tabel i zapisuje je z deduplikacją. Uruchamiany
+        cyklicznie przez \texttt{cron}.
+  \item[\texttt{dashboard/app.py}] Cienka warstwa kontrolera Flask. Definiuje
+        jedną stronę HTML oraz dziesięć endpointów JSON; całą logikę danych
+        deleguje do modułu \texttt{db}.
+  \item[\texttt{dashboard/db.py}] Serce analityczne aplikacji. Zawiera całą
+        logikę SQL i agregacji: wskaźniki KPI, szeregi czasowe, mapę cieplną,
+        rankingi, paginowane logi. Obsługuje zakresy czasu i automatyczną
+        detekcję formatu znacznika czasu.
+  \item[\texttt{dashboard/geoip.py}] Geolokalizacja adresów IP z trwałą pamięcią
+        podręczną (\texttt{data/geo\_cache.json}); zapytania wsadowe do ip-api.com,
+        pomijanie adresów prywatnych, generowanie emoji flag.
+  \item[\texttt{dashboard/iso\_codes.py}] Tablica odwzorowań kodów ISO 3166-1
+        alpha-2 $\rightarrow$ alpha-3, wymaganych przez mapę GeoJSON.
+  \item[\texttt{dashboard/templates/}, \texttt{static/}] Warstwa prezentacji:
+        szablony Jinja2 oraz pliki CSS i JavaScript renderujące mapę, wykresy
+        i tabele.
+\end{description}
+
+\section{Diagram sekwencji}
+
+Rysunek \ref{fig:seq} ilustruje przebieg typowej interakcji: załadowanie panelu
+i pobranie danych do mapy ataków.
+
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}
+  % Lifelines
+  \node[lifeline] (br) at (0,0) {Przeglądarka};
+  \node[lifeline] (fl) at (4,0) {Flask\\\texttt{app.py}};
+  \node[lifeline] (db) at (8,0) {Warstwa DB\\\texttt{db.py}};
+  \node[lifeline] (gx) at (12,0) {geoip\\+ cache};
+
+  \foreach \n in {br,fl,db,gx} {
+    \draw[dashed, linegray] (\n.south) -- ($(\n.south)+(0,-9)$);
+  }
+
+  \def\y{-1}
+  \draw[flow] ($(br.south)+(0,\y)$) -- node[above,font=\scriptsize]{GET /} ($(fl.south)+(0,\y)$);
+  \def\y{-2}
+  \draw[flow] ($(fl.south)+(0,\y)$) -- node[above,font=\scriptsize]{get\_summary()} ($(db.south)+(0,\y)$);
+  \def\y{-2.8}
+  \draw[flowback] ($(db.south)+(0,\y)$) -- node[above,font=\scriptsize]{HTML (KPI)} ($(fl.south)+(0,\y)$);
+  \def\y{-3.6}
+  \draw[flowback] ($(fl.south)+(0,\y)$) -- node[above,font=\scriptsize]{strona HTML} ($(br.south)+(0,\y)$);
+  \def\y{-4.6}
+  \draw[flow] ($(br.south)+(0,\y)$) -- node[above,font=\scriptsize]{GET /api/geo} ($(fl.south)+(0,\y)$);
+  \def\y{-5.4}
+  \draw[flow] ($(fl.south)+(0,\y)$) -- node[above,font=\scriptsize]{get\_geo()} ($(db.south)+(0,\y)$);
+  \def\y{-6.2}
+  \draw[flow] ($(db.south)+(0,\y)$) -- node[above,font=\scriptsize]{locate(ips)} ($(gx.south)+(0,\y)$);
+  \def\y{-7.0}
+  \draw[flowback] ($(gx.south)+(0,\y)$) -- node[above,font=\scriptsize]{kraj, lat/lng} ($(db.south)+(0,\y)$);
+  \def\y{-7.8}
+  \draw[flowback] ($(db.south)+(0,\y)$) -- node[above,font=\scriptsize]{agregaty} ($(fl.south)+(0,\y)$);
+  \def\y{-8.6}
+  \draw[flowback] ($(fl.south)+(0,\y)$) -- node[above,font=\scriptsize]{JSON} ($(br.south)+(0,\y)$);
+\end{tikzpicture}
+\caption{Diagram sekwencji: załadowanie panelu i pobranie danych mapy.}
+\label{fig:seq}
+\end{figure}
+
+\section{Kluczowe algorytmy i decyzje projektowe}
+
+W tej sekcji opisujemy oryginalne rozwiązania techniczne, które stanowią
+najważniejszy wkład inżynierski zespołu.
+
+\subsection{Przyrostowe czytanie logów}
+
+Pliki logów rosną nieustannie, a parser uruchamiany jest co minutę. Czytanie
+całego pliku za każdym razem byłoby marnotrawstwem. Dlatego parser zapamiętuje
+w tabeli \texttt{parser\_state} \emph{przesunięcie bajtowe} (\texttt{byte\_offset})
+do którego doczytał, i przy kolejnym uruchomieniu zaczyna od tego miejsca.
+Mechanizm uwzględnia również \emph{rotację logów}: jeśli plik jest krótszy niż
+zapisane przesunięcie, oznacza to, że został on obrócony, więc odczyt zaczyna
+się od początku. Dodatkowo przetwarzane są tylko pełne linie (do ostatniego
+znaku nowej linii), aby uniknąć parsowania linii zapisywanej właśnie przez
+honeypot. Fragment tej logiki przedstawia listing \ref{lst:incr}.
+
+\begin{lstlisting}[style=py,caption={Przyrostowe czytanie nowych linii logu (fragment).},label={lst:incr}]
+def _iter_new_lines(c, log_path):
+    offset = _get_offset(c, log_path)
+    file_size = os.path.getsize(log_path)
+    if file_size < offset:        # log zostal obrocony -> czytaj od poczatku
+        offset = 0
+    with open(log_path, "rb") as f:
+        f.seek(offset)
+        data = f.read()
+    last_nl = data.rfind(b"\n")   # przetwarzaj tylko pelne linie
+    if last_nl == -1:
+        return
+    chunk = data[:last_nl + 1]
+    _set_offset(c, log_path, offset + len(chunk))
+    for raw in chunk.split(b"\n"):
+        line = raw.decode("utf-8", errors="replace").strip()
+        if line:
+            yield line
+\end{lstlisting}
+
+\subsection{Idempotentna deduplikacja zapisu}
+
+Aby ten sam atak nie został policzony wielokrotnie (np. przy ponownym
+przetworzeniu logu), na tabelach utworzono \emph{unikalne indeksy} obejmujące
+zestaw kolumn jednoznacznie identyfikujących zdarzenie, a zapis wykonywany jest
+poleceniem \texttt{INSERT OR IGNORE}. Jeśli w momencie tworzenia indeksu w bazie
+istnieją już duplikaty (z wcześniejszych wersji parsera), funkcja
+\texttt{\_dedupe\_existing()} usuwa nadmiarowe wiersze (zachowując rekord
+o najniższym \texttt{id}) i ponawia próbę. Dzięki temu cały proces parsowania
+jest \textbf{idempotentny} --- wielokrotne uruchomienie nie zniekształca danych.
+
+\subsection{Trwała pamięć podręczna geolokalizacji}
+
+Darmowy plan ip-api.com jest limitowany liczbą zapytań. Moduł \texttt{geoip}
+ogranicza ruch sieciowy do absolutnego minimum:
+
+\begin{itemize}
+  \item każde unikalne IP jest odpytywane \emph{co najwyżej raz}, a wynik
+        zapisywany w pliku \texttt{geo\_cache.json};
+  \item adresy prywatne i zarezerwowane są rozpoznawane lokalnie
+        (\texttt{ipaddress.is\_global}) i nigdy nie są wysyłane do API;
+  \item zapytania są \emph{wsadowe} (do 100 adresów w jednym żądaniu);
+  \item adresy, których nie udało się rozwiązać, są zapamiętywane jako
+        ,,rozwiązane, lecz nieznane'' (\texttt{None}), aby nie próbować ich
+        ponownie;
+  \item wszystkie błędy sieciowe są wyciszane --- brak łączności z API powoduje
+        jedynie brak flag, a nie awarię panelu.
+\end{itemize}
+
+\subsection{Niezależność od formatu znacznika czasu}
+
+Różne honeypoty mogą zapisywać czas jako tekst ISO-8601 albo jako liczbę
+(epoka uniksowa). Funkcja \texttt{\_ts\_mod()} próbkuje jeden znacznik czasu
+z bazy i ustala, czy jest on liczbą; na tej podstawie dobiera modyfikator
+(\texttt{'unixepoch'} lub jego brak), który jest następnie wstawiany do każdego
+wywołania \texttt{datetime()}/\texttt{strftime()} w zapytaniach SQL. Dzięki temu
+ta sama logika działa poprawnie niezależnie od formatu danych.
+
+\subsection{Odporność na nieaktualną kopię bazy}
+
+Funkcja \texttt{\_anchor()} wyznacza punkt odniesienia ,,teraz'' jako maksimum
+z rzeczywistego czasu bieżącego oraz najnowszego znacznika czasu w bazie.
+Pozwala to poprawnie renderować szeregi czasowe i mapę cieplną także wtedy, gdy
+panel uruchamiany jest lokalnie na pobranej (i tym samym lekko nieaktualnej)
+kopii bazy danych.
+
+\subsection{Wspólne rozwiązywanie ścieżki bazy}
+
+Funkcja \texttt{\_resolve\_db\_path()} kolejno sprawdza: zmienną środowiskową
+\texttt{HONEYWATCH\_DB}, ścieżkę produkcyjną \texttt{/opt/honeywatch/honeywatch.db},
+katalog projektu oraz pulpit użytkownika. Dzięki temu \textbf{ten sam kod}
+uruchamia się bez zmian zarówno na serwerze produkcyjnym, jak i na komputerze
+deweloperskim z lokalną kopią bazy.
+
+\section{Wdrożenie produkcyjne}
+
+System działa na serwerze VPS z systemem Linux. Panel jest utrzymywany przez
+usługę \texttt{systemd} (\texttt{honeywatch-dashboard.service}), która
+automatycznie wznawia jego działanie po awarii. Parser uruchamiany jest co
+minutę przez \texttt{cron}. Skrypt \texttt{install-vps.sh} automatyzuje
+instalację: instaluje zależności systemowe, tworzy środowisko wirtualne
+Pythona, instaluje pakiety z \texttt{requirements.txt} oraz rejestruje
+i uruchamia usługę. Listing \ref{lst:svc} przedstawia definicję usługi systemd.
+
+\begin{lstlisting}[caption={Definicja usługi systemd panelu.},label={lst:svc}]
+[Service]
+Type=simple
+WorkingDirectory=/opt/honeywatch/HoneyWatchApp
+Environment=HONEYWATCH_DB=/opt/honeywatch/honeywatch.db
+Environment=FLASK_DEBUG=0
+Environment=PORT=5000
+ExecStart=/opt/honeywatch/venv/bin/python -m dashboard.app
+Restart=on-failure
+RestartSec=5
+WantedBy=multi-user.target
+\end{lstlisting}
+
+Ze względów bezpieczeństwa port panelu (5000) \textbf{nie jest} otwierany dla
+całego świata --- baza zawiera adresy IP napastników oraz przechwycone hasła.
+Dostęp do panelu ograniczono regułą zapory (\texttt{ufw}) do zaufanego adresu
+administratora.
+
+% =====================================================================
+%  ROZDZIAŁ 4 — FUNKCJONALNOŚĆ Z PERSPEKTYWY UŻYTKOWNIKA
+% =====================================================================
+\chapter{Funkcjonalność z perspektywy użytkownika}
+\label{ch:func}
+
+Cały panel HoneyWatch został zaprojektowany jako \textbf{pojedyncza, przewijana
+strona} (ang. \emph{single-page dashboard}) z ciemnym motywem kolorystycznym
+i akcentem w barwie miodu (\textcolor{honey}{$\blacksquare$} \texttt{\#F59E0B}),
+nawiązującym do nazwy projektu. Po lewej stronie znajduje się stały pasek
+nawigacyjny, którego pozycje przewijają widok do odpowiednich sekcji. U góry
+umieszczono pasek tytułowy z przełącznikiem zakresu czasu oraz przyciskiem
+odświeżania. Rysunek \ref{fig:overview} przedstawia ogólny widok panelu.
+
+\begin{figure}[ht]
+\centering
+\zrzut{8cm}{Ogólny widok panelu HoneyWatch (pasek boczny, KPI, mapa, wykresy).}
+\caption{Pełny widok panelu głównego HoneyWatch.}
+\label{fig:overview}
+\end{figure}
+
+\textit{Uwaga: w miejscach oznaczonych jako ,,Miejsce na zrzut ekranu''
+należy wstawić rzeczywiste zrzuty z działającej aplikacji. Aby to zrobić, wystarczy
+zastąpić polecenie \texttt{\textbackslash zrzut\{...\}\{...\}} poleceniem
+\texttt{\textbackslash includegraphics[width=\textbackslash textwidth]\{screenshots/plik.png\}}.}
+
+\section{Pasek nawigacyjny i nagłówek}
+
+Pasek boczny zawiera logo projektu (sześciokąt nawiązujący do plastra miodu)
+oraz pozycje nawigacyjne: \emph{Overview}, \emph{Attacks}, \emph{Map},
+\emph{Statistics}, \emph{Logs} oraz \emph{Top Credentials}. Kliknięcie pozycji
+płynnie przewija stronę do odpowiedniej sekcji, a aktywna sekcja jest
+automatycznie podświetlana podczas przewijania (mechanizm
+\texttt{IntersectionObserver}).
+
+Nagłówek mieści \textbf{przełącznik zakresu czasu} z czterema opcjami:
+\emph{1 godzina}, \emph{24h}, \emph{Tydzień} oraz \emph{Miesiąc}. Wybór zakresu
+przeładowuje stronę z odpowiednim parametrem, a wszystkie wskaźniki, wykresy
+i tabele dostosowują się do wybranego okna czasowego.
+
+\begin{figure}[ht]
+\centering
+\zrzut{3cm}{Nagłówek z przełącznikiem zakresu czasu (1h / 24h / Tydzień / Miesiąc) i przyciskiem odświeżania.}
+\caption{Pasek nagłówka z przełącznikiem zakresu czasu.}
+\label{fig:header}
+\end{figure}
+
+\section{Wskaźniki KPI}
+
+Na samej górze treści wyświetlane są cztery kafelki ze wskaźnikami kluczowymi
+(KPI), dające natychmiastowy obraz sytuacji:
+
+\begin{itemize}
+  \item \textbf{Total Attacks} --- łączna liczba zarejestrowanych zdarzeń
+        w wybranym oknie czasu;
+  \item \textbf{Unique IPs} --- liczba unikalnych adresów źródłowych;
+  \item \textbf{Login Attempts} --- liczba prób logowania (udanych i nieudanych);
+  \item \textbf{Countries} --- liczba krajów, z których pochodziły ataki.
+\end{itemize}
+
+Każdy kafelek zawiera dodatkowo \textbf{wskaźnik zmiany procentowej} względem
+poprzedniego, analogicznego okna czasu --- ze strzałką w górę (kolor czerwony,
+wzrost zagrożenia) lub w dół (kolor zielony, spadek). Dzięki temu użytkownik od
+razu widzi, czy aktywność rośnie, czy maleje.
+
+\begin{figure}[ht]
+\centering
+\zrzut{3.5cm}{Cztery kafelki KPI: Total Attacks, Unique IPs, Login Attempts, Countries --- każdy ze wskaźnikiem zmiany \%.}
+\caption{Panel wskaźników KPI.}
+\label{fig:kpi}
+\end{figure}
+
+\section{Interaktywna mapa ataków}
+
+Centralnym i najbardziej charakterystycznym elementem panelu jest interaktywna
+mapa świata (Leaflet) z ciemnymi kafelkami CARTO. Każdy kraj będący źródłem
+ataków jest oznaczony \textbf{okrągłym znacznikiem}, którego promień jest
+proporcjonalny do liczby ataków --- im większe koło, tym intensywniejszy ruch
+z danego regionu. Po najechaniu kursorem na znacznik wyświetlana jest nazwa
+kraju oraz dokładna liczba zdarzeń, a panel informacyjny obok mapy aktualizuje
+swoją treść. Mapa automatycznie dopasowuje widok tak, aby objąć wszystkie
+znaczniki.
+
+Obok mapy znajduje się lista \textbf{Top Countries} --- ranking krajów według
+liczby ataków, z flagami i wartościami liczbowymi, uzupełniony pozycją zbiorczą
+,,Other'' (Pozostałe).
+
+\begin{figure}[ht]
+\centering
+\zrzut{8cm}{Interaktywna mapa świata ze znacznikami proporcjonalnymi do liczby ataków oraz lista Top Countries.}
+\caption{Mapa źródeł ataków wraz z rankingiem krajów.}
+\label{fig:map}
+\end{figure}
+
+\section{Wykresy i statystyki}
+
+Sekcja statystyk prezentuje dane w formie czterech wykresów (Chart.js).
+
+\subsection{Oś czasu ataków}
+
+Wykres liniowy z gradientowym wypełnieniem pokazuje liczbę ataków w czasie.
+Ziarnistość osi dostosowuje się do wybranego zakresu: minuty (1 godzina),
+godziny (24h) lub dni (tydzień, miesiąc). Brakujące przedziały są wypełniane
+zerami, dzięki czemu wykres jest ciągły i czytelny.
+
+\begin{figure}[ht]
+\centering
+\zrzut{5cm}{Wykres liniowy ,,Attacks Over Time'' z gradientowym wypełnieniem.}
+\caption{Oś czasu aktywności ataków.}
+\label{fig:timeline}
+\end{figure}
+
+\subsection{Najczęstsze nazwy użytkowników i hasła}
+
+Dwa poziome wykresy słupkowe prezentują rankingi najczęściej próbowanych
+\textbf{nazw użytkowników} (kolor miodowy) oraz \textbf{haseł} (kolor czerwony).
+Są to jedne z najciekawszych danych w całym systemie --- pokazują, jakich
+poświadczeń ,,na ślepo'' próbują boty (klasycznie: \texttt{root}, \texttt{admin},
+\texttt{123456}, \texttt{password}).
+
+\begin{figure}[ht]
+\centering
+\zrzut{5cm}{Dwa poziome wykresy słupkowe: Top Usernames oraz Top Passwords.}
+\caption{Rankingi najczęściej próbowanych poświadczeń.}
+\label{fig:creds}
+\end{figure}
+
+\subsection{Typy zdarzeń}
+
+Wykres pierścieniowy (\emph{doughnut}) przedstawia rozkład typów zdarzeń
+(np. skanowanie portów, nieudane logowanie, udane logowanie, sondowanie HTTP),
+z czytelną legendą HTML zawierającą udziały procentowe. Każdy typ ma przypisany
+stały kolor, spójny w całym panelu.
+
+\begin{figure}[ht]
+\centering
+\zrzut{5cm}{Wykres pierścieniowy ,,Event Types'' z legendą i udziałami procentowymi.}
+\caption{Rozkład typów zdarzeń.}
+\label{fig:events}
+\end{figure}
+
+\subsection{Mapa cieplna aktywności}
+
+Mapa cieplna (\emph{heatmap}) w układzie 7 dni $\times$ 24 godziny pokazuje,
+w których dniach tygodnia i o których godzinach aktywność jest największa.
+Intensywność koloru każdej komórki odpowiada liczbie zdarzeń. Pozwala to wykryć
+wzorce czasowe --- np. czy boty działają równomiernie przez całą dobę, czy
+występują wyraźne szczyty.
+
+\begin{figure}[ht]
+\centering
+\zrzut{4.5cm}{Mapa cieplna aktywności w układzie dzień tygodnia $\times$ godzina.}
+\caption{Mapa cieplna aktywności ataków.}
+\label{fig:heatmap}
+\end{figure}
+
+\section{Ostatnie ataki}
+
+Sekcja ,,Recent Attacks'' wyświetla listę najnowszych zdarzeń w przystępnej
+formie: flaga kraju, adres IP, typ zdarzenia oraz czas. Pozwala to na bieżąco
+obserwować, co dzieje się ,,tu i teraz''.
+
+\begin{figure}[ht]
+\centering
+\zrzut{4cm}{Lista ostatnich ataków z flagami krajów, adresami IP i typami zdarzeń.}
+\caption{Lista ostatnich ataków.}
+\label{fig:recent}
+\end{figure}
+
+\section{Przeszukiwalna tabela logów}
+
+Na dole panelu znajduje się pełna \textbf{tabela logów} (\emph{Attack Logs})
+prezentująca surowe zdarzenia w formie tabelarycznej, z kolumnami: czas, adres
+IP, port, kraj (z flagą), typ zdarzenia, nazwa użytkownika, hasło oraz źródło
+(honeypot). Tabela jest \textbf{stronicowana} (domyślnie 100 wierszy na stronę)
+z przyciskami ,,Poprzednia''/,,Następna'' oraz licznikiem ,,od--do z N''.
+Wszystkie wartości pochodzące od napastnika są bezpiecznie ,,ucieczkowane''
+(\texttt{escapeHtml}), co zapobiega atakom XSS poprzez spreparowane dane
+wejściowe.
+
+\begin{figure}[ht]
+\centering
+\zrzut{7cm}{Stronicowana tabela logów z kolumnami czas/IP/port/kraj/typ/login/hasło/źródło.}
+\caption{Przeszukiwalna, stronicowana tabela logów.}
+\label{fig:logs}
+\end{figure}
+
+% =====================================================================
+%  ROZDZIAŁ 5 — PRZYKŁADY UŻYCIA I DEMONSTRACJA
+% =====================================================================
+\chapter{Przykłady użycia i demonstracja wyników}
+\label{ch:demo}
+
+W tym rozdziale przedstawiamy kilka reprezentatywnych scenariuszy korzystania
+z systemu wraz z uzyskanymi wynikami, które potwierdzają, że zaimplementowane
+funkcje rzeczywiście działają na rzeczywistych danych zebranych przez honeypoty.
+
+\section{Charakterystyka zebranych danych}
+
+System był wystawiony na publiczny adres IP i przez okres działania zarejestrował
+ataki z wielu krajów świata. Pamięć podręczna geolokalizacji
+(\texttt{geo\_cache.json}) zawiera adresy IP m.in. z następujących krajów:
+Holandia (NL), Stany Zjednoczone (US), Chiny (CN), Tajlandia (TH), Niemcy (DE),
+Wielka Brytania (GB), Rosja (RU), Japonia (JP), Francja (FR), Brazylia (BR),
+Polska (PL) oraz Iran (IR). Już ten zbiór dobrze ilustruje globalny
+i zautomatyzowany charakter zjawiska --- ataki nadchodzą z całego świata,
+przez całą dobę, bez żadnej legalnej przyczyny do łączenia się z naszym serwerem.
+
+\section{Scenariusz 1: Szybka ocena sytuacji (KPI + mapa)}
+
+\textbf{Cel:} analityk chce w kilka sekund ocenić bieżącą skalę zagrożenia.
+
+\textbf{Kroki:}
+\begin{enumerate}
+  \item Otwarcie panelu w przeglądarce.
+  \item Odczyt czterech wskaźników KPI (łączna liczba ataków, unikalne IP,
+        próby logowania, liczba krajów) wraz ze wskaźnikami zmiany procentowej.
+  \item Spojrzenie na mapę --- największe koła wskazują kraje generujące
+        najwięcej ruchu.
+  \item (Opcjonalnie) zmiana zakresu czasu na ,,1 godzina'', aby zobaczyć
+        wyłącznie najświeższą aktywność.
+\end{enumerate}
+
+\textbf{Wynik:} natychmiastowy, syntetyczny obraz sytuacji bez konieczności
+analizowania surowych logów. Wzrost wskaźnika ,,Total Attacks'' o wartość dodatnią
+(czerwona strzałka) sygnalizuje nasilenie aktywności.
+
+\section{Scenariusz 2: Analiza słownika botów (Top Credentials)}
+
+\textbf{Cel:} sprawdzenie, jakich nazw użytkowników i haseł najczęściej próbują
+napastnicy --- bezpośrednio przekłada się to na rekomendacje dotyczące polityki
+haseł.
+
+\textbf{Kroki:}
+\begin{enumerate}
+  \item Przewinięcie do sekcji wykresów słupkowych \emph{Top Usernames}
+        i \emph{Top Passwords} (lub kliknięcie ,,Top Credentials'' w nawigacji).
+  \item Odczyt rankingu --- typowo dominują wartości takie jak \texttt{root},
+        \texttt{admin}, \texttt{user}, \texttt{123456}, \texttt{password},
+        \texttt{12345}.
+\end{enumerate}
+
+\textbf{Wynik:} potwierdzenie, że ataki słownikowe opierają się na niewielkim
+zestawie domyślnych i banalnych poświadczeń. \textbf{Wniosek obronny:} samo
+wyłączenie logowania na konto \texttt{root} oraz wymuszenie silnych haseł
+neutralizuje zdecydowaną większość obserwowanych prób.
+
+\section{Scenariusz 3: Wykrywanie wzorców czasowych (heatmap + oś czasu)}
+
+\textbf{Cel:} ustalenie, czy aktywność ataków ma charakter ciągły, czy
+występują wyraźne szczyty.
+
+\textbf{Kroki:}
+\begin{enumerate}
+  \item Ustawienie zakresu czasu na ,,Tydzień'' lub ,,Miesiąc''.
+  \item Analiza wykresu osi czasu (trend ogólny) oraz mapy cieplnej
+        (rozkład dzień $\times$ godzina).
+\end{enumerate}
+
+\textbf{Wynik:} zazwyczaj obserwuje się dość równomierny rozkład w ciągu doby,
+co potwierdza zautomatyzowany (botowy), a nie ręczny charakter większości
+ataków --- maszyny nie ,,śpią''.
+
+\section{Scenariusz 4: Dochodzenie dotyczące pojedynczego adresu IP (tabela logów)}
+
+\textbf{Cel:} szczegółowe prześledzenie aktywności wybranego adresu IP.
+
+\textbf{Kroki:}
+\begin{enumerate}
+  \item Przewinięcie do sekcji \emph{Attack Logs}.
+  \item Przeglądanie kolejnych stron tabeli (przyciski ,,Następna''/,,Poprzednia'').
+  \item Odczyt szczegółów zdarzeń: portu, typu, próbowanych poświadczeń
+        i honeypotu, który zarejestrował zdarzenie.
+\end{enumerate}
+
+\textbf{Wynik:} pełny, surowy materiał dowodowy dla każdego zdarzenia --- przydatny
+np. do zgłoszenia nadużycia do dostawcy danej sieci lub do dodania adresu na
+listę blokowanych.
+
+\section{Przykładowe zapytania analityczne (SQL)}
+
+Ponieważ dane są przechowywane w relacyjnej bazie SQLite, można je również
+analizować bezpośrednio zapytaniami SQL. Poniższe przykłady odpowiadają
+agregacjom realizowanym wewnętrznie przez panel.
+
+\begin{lstlisting}[style=sqlstyle,caption={Najczęściej próbowane hasła.}]
+SELECT password, COUNT(*) AS cnt
+FROM attacks
+WHERE password IS NOT NULL AND password <> ''
+GROUP BY password
+ORDER BY cnt DESC
+LIMIT 10;
+\end{lstlisting}
+
+\begin{lstlisting}[style=sqlstyle,caption={Liczba unikalnych adresów IP wg kraju (po wzbogaceniu geolokalizacją).}]
+SELECT src_ip, COUNT(*) AS cnt
+FROM attacks
+GROUP BY src_ip
+ORDER BY cnt DESC;
+\end{lstlisting}
+
+\begin{lstlisting}[style=sqlstyle,caption={Aktywność w rozbiciu na godziny doby.}]
+SELECT strftime('%H', timestamp) AS hour, COUNT(*) AS events
+FROM attacks
+GROUP BY hour
+ORDER BY hour;
+\end{lstlisting}
+
+\section{Przykładowy wpis w logu honeypotu}
+
+Listing \ref{lst:cowrie} pokazuje przykładowy wpis JSON z honeypotu Cowrie
+(nieudana próba logowania), który parser przekształca w wiersz tabeli
+\texttt{attacks} (\texttt{event\_type = login\_failed}, \texttt{success = 0}).
+
+\begin{lstlisting}[caption={Przykładowy wpis JSON z logu Cowrie.},label={lst:cowrie}]
+{"eventid": "cowrie.login.failed",
+ "username": "root", "password": "123456",
+ "src_ip": "185.224.128.17", "src_port": 54422,
+ "timestamp": "2026-05-30T22:14:07.512Z",
+ "session": "a1b2c3d4"}
+\end{lstlisting}
+
+% =====================================================================
+%  ROZDZIAŁ 6 — ORGANIZACJA PRACY ZESPOŁU
+% =====================================================================
+\chapter{Organizacja pracy zespołu}
+\label{ch:team}
+
+Projekt był realizowany przez dwuosobowy zespół. Pracę zorganizowano w oparciu
+o system kontroli wersji \textbf{Git} oraz platformę \textbf{GitHub}, co
+umożliwiło równoległą pracę nad różnymi częściami systemu i bieżący przegląd
+wprowadzanych zmian.
+
+\section{Podział zadań i obszarów odpowiedzialności}
+
+\begin{table}[ht]
+\centering
+\small
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{3.6cm} X}
+\toprule
+\textbf{Członek zespołu} & \textbf{Główne obszary odpowiedzialności} \\
+\midrule
+\textbf{Mateusz Rup} &
+Architektura systemu i potoku danych; konfiguracja i wdrożenie honeypotów
+(Cowrie, OpenCanary) na serwerze VPS; parser logów (\texttt{parser.py})
+z przyrostowym czytaniem i deduplikacją; projekt schematu bazy danych; warstwa
+dostępu do danych i logika analityczna (\texttt{db.py}); moduł geolokalizacji
+(\texttt{geoip.py}); aplikacja serwerowa Flask (\texttt{app.py}); automatyzacja
+wdrożenia (systemd, cron, skrypt instalacyjny); dokumentacja. \\
+\midrule
+\textbf{Jakub Gwizdała} &
+Warstwa prezentacji i wizualizacji danych; integracja interaktywnej mapy
+\textbf{Leaflet} ze znacznikami proporcjonalnymi do liczby ataków; współpraca
+przy stylizacji frontendu i komponentach wizualnych panelu; testy interfejsu
+użytkownika. \\
+\bottomrule
+\end{tabularx}
+\caption{Podział obowiązków w zespole.}
+\label{tab:team}
+\end{table}
+
+Podział ten odzwierciedlają również historia repozytorium i przepływ pracy
+oparty na gałęziach funkcyjnych --- m.in. mapa Leaflet powstała na osobnej
+gałęzi \texttt{feature/leaflet-map} i została włączona do gałęzi głównej poprzez
+\emph{Pull Request} po przeglądzie kodu.
+
+\section{Metody komunikacji i koordynacji}
+
+\begin{itemize}
+  \item \textbf{Git/GitHub} --- wspólne repozytorium, gałęzie funkcyjne,
+        \emph{Pull Requesty} z przeglądem kodu przed scaleniem do gałęzi głównej.
+  \item \textbf{Bieżąca komunikacja} --- regularne ustalenia dotyczące zakresu
+        prac, podziału zadań i integracji poszczególnych komponentów.
+  \item \textbf{Wspólny serwer VPS} --- jedno środowisko produkcyjne, na którym
+        testowano działanie całego potoku na rzeczywistych danych.
+\end{itemize}
+
+\section{Przyjęty proces pracy}
+
+Prace przebiegały etapowo, zgodnie z architekturą potoku danych: najpierw
+uruchomiono i skonfigurowano honeypoty oraz zaprojektowano schemat bazy,
+następnie powstał parser logów, później warstwa dostępu do danych i aplikacja
+serwerowa, a na końcu warstwa wizualizacji (mapa, wykresy) oraz testy całości
+na żywych danych. Takie podejście pozwalało weryfikować poprawność każdego etapu
+na rzeczywistych danych, zanim przystąpiono do kolejnego.
+
+% =====================================================================
+%  ROZDZIAŁ 7 — PODSUMOWANIE I WNIOSKI
+% =====================================================================
+\chapter{Podsumowanie i wnioski}
+\label{ch:summary}
+
+\section{Osiągnięte rezultaty}
+
+Wszystkie założone cele projektu zostały zrealizowane. Powstał kompletny,
+działający system, który:
+
+\begin{itemize}
+  \item zbiera \textbf{rzeczywiste} dane o atakach z publicznie wystawionego
+        serwera, wykorzystując dwa uzupełniające się honeypoty (Cowrie
+        i OpenCanary);
+  \item przetwarza surowe logi w ustrukturyzowaną bazę danych za pomocą
+        samodzielnie napisanego, odpornego na błędy i duplikaty parsera;
+  \item wzbogaca dane o geolokalizację adresów IP z poszanowaniem limitów
+        zewnętrznego API (trwała pamięć podręczna);
+  \item prezentuje wyniki w czytelnym, interaktywnym panelu webowym
+        (mapa, wykresy, mapa cieplna, stronicowana tabela logów);
+  \item działa w trybie produkcyjnym, automatycznie aktualizując dane
+        (cron + systemd).
+\end{itemize}
+
+\section{Wnioski techniczne}
+
+\begin{itemize}
+  \item \textbf{Prostota ma wartość.} Rezygnacja z zależności zewnętrznych
+        w parserze oraz wybór lekkiej bazy SQLite znacznie uprościły wdrożenie
+        i utrzymanie systemu na minimalnym serwerze VPS.
+  \item \textbf{Idempotentność się opłaca.} Mechanizm przyrostowego czytania
+        logów połączony z deduplikacją (\texttt{INSERT OR IGNORE} + unikalne
+        indeksy) sprawia, że parser można uruchamiać dowolnie często, bez
+        ryzyka zniekształcenia danych.
+  \item \textbf{Bezpośredni odczyt bazy} przez panel okazał się trafną decyzją
+        architektoniczną --- wyeliminował potrzebę budowania pośredniej warstwy
+        API i synchronizacji danych między procesami.
+\end{itemize}
+
+\section{Wnioski merytoryczne (dotyczące zjawiska)}
+
+Zebrane dane potwierdziły, że \textbf{każdy} serwer wystawiony do Internetu jest
+niemal natychmiast i nieprzerwanie atakowany przez zautomatyzowane boty z całego
+świata. Ataki opierają się głównie na prostych słownikach domyślnych poświadczeń,
+co oznacza, że podstawowe środki higieny bezpieczeństwa (silne, unikalne hasła,
+wyłączenie logowania na konto \texttt{root}, ograniczenie dostępu do usług
+administracyjnych) neutralizują zdecydowaną większość obserwowanego ruchu.
+
+\section{Ograniczenia rozwiązania}
+
+W duchu rzetelności wskazujemy znane ograniczenia obecnej wersji:
+
+\begin{itemize}
+  \item \textbf{Brak automatycznego odświeżania w przeglądarce} --- aktualizacja
+        danych wymaga odświeżenia strony (przyciskiem lub klawiszem F5).
+  \item \textbf{Geolokalizacja zależna od zewnętrznego API} --- dokładność
+        i dostępność danych o położeniu zależą od usługi ip-api.com.
+  \item \textbf{Honeypoty średnio-interaktywne} --- system rejestruje próby
+        i polecenia, lecz nie udostępnia napastnikowi pełnego środowiska, co
+        ogranicza głębię analizy zaawansowanych ataków.
+  \item \textbf{Brak warstwy uwierzytelniania panelu} --- dostęp jest
+        zabezpieczony wyłącznie na poziomie zapory sieciowej (reguła \texttt{ufw}).
+  \item \textbf{Skala} --- architektura jednoserwerowa oparta na SQLite jest
+        odpowiednia dla tego projektu, lecz nie jest przeznaczona do obsługi
+        wielu honeypotów rozproszonych geograficznie.
+  \item \textbf{Brak zautomatyzowanych testów} --- weryfikacja odbywała się
+        manualnie na rzeczywistych danych.
+\end{itemize}
+
+\section{Cechy szczególne i innowacyjne}
+
+Na tle istniejących, ciężkich platform (np. T-Pot) HoneyWatch wyróżnia się
+\textbf{lekkością i czytelnością}: cały potok przetwarzania danych został
+napisany od podstaw, bez zbędnych zależności, a panel kładzie nacisk na
+przejrzystą prezentację najważniejszych informacji. Mechanizmy takie jak
+przyrostowe, idempotentne parsowanie, niezależność od formatu znacznika czasu
+czy współdzielona ścieżka bazy (jeden kod dla produkcji i dla środowiska
+deweloperskiego) stanowią konkretne, przemyślane rozwiązania inżynierskie.
+
+\section{Kierunki dalszego rozwoju}
+
+\begin{itemize}
+  \item automatyczne odświeżanie danych w przeglądarce (np. WebSocket lub
+        cykliczne odpytywanie API);
+  \item dodanie kolejnych honeypotów oraz dokończenie obsługi Dionaea;
+  \item filtrowanie i wyszukiwanie w tabeli logów (po IP, kraju, dacie);
+  \item eksport danych i raportów (CSV, PDF);
+  \item warstwa uwierzytelniania dostępu do panelu;
+  \item wzbogacenie danych o reputację IP (np. listy znanych botnetów)
+        oraz powiadomienia o nietypowych skokach aktywności.
+\end{itemize}
+
+% =====================================================================
+%  BIBLIOGRAFIA (styl IEEE)
+% =====================================================================
+\begin{thebibliography}{9}
+\bibitem{cowrie}
+Cowrie Authors, \emph{Cowrie SSH/Telnet Honeypot --- Documentation}. [Online].
+Dostępne: \url{https://cowrie.readthedocs.io}. [Dostęp: 8 cze. 2026].
+
+\bibitem{opencanary}
+Thinkst Applied Research, \emph{OpenCanary Documentation}. [Online].
+Dostępne: \url{https://opencanary.readthedocs.io}. [Dostęp: 8 cze. 2026].
+
+\bibitem{flask}
+Pallets Projects, \emph{Flask Documentation (3.x)}. [Online].
+Dostępne: \url{https://flask.palletsprojects.com}. [Dostęp: 8 cze. 2026].
+
+\bibitem{sqlite}
+SQLite Consortium, \emph{SQLite Documentation}. [Online].
+Dostępne: \url{https://www.sqlite.org/docs.html}. [Dostęp: 8 cze. 2026].
+
+\bibitem{python}
+Python Software Foundation, \emph{The Python Standard Library}. [Online].
+Dostępne: \url{https://docs.python.org/3/library/}. [Dostęp: 8 cze. 2026].
+
+\bibitem{leaflet}
+V. Agafonkin, \emph{Leaflet --- an open-source JavaScript library for
+interactive maps}. [Online]. Dostępne: \url{https://leafletjs.com}.
+[Dostęp: 8 cze. 2026].
+
+\bibitem{chartjs}
+Chart.js Contributors, \emph{Chart.js Documentation}. [Online].
+Dostępne: \url{https://www.chartjs.org/docs/latest/}. [Dostęp: 8 cze. 2026].
+
+\bibitem{ipapi}
+ip-api.com, \emph{IP Geolocation API Documentation}. [Online].
+Dostępne: \url{https://ip-api.com/docs}. [Dostęp: 8 cze. 2026].
+
+\bibitem{carto}
+CARTO, \emph{CARTO Basemaps (Dark Matter)}. [Online].
+Dostępne: \url{https://carto.com/basemaps/}. [Dostęp: 8 cze. 2026].
+
+\bibitem{spitzner}
+L. Spitzner, \emph{Honeypots: Tracking Hackers}. Boston, MA, USA:
+Addison-Wesley, 2002.
+\end{thebibliography}
+
+% =====================================================================
+%  ZAŁĄCZNIK
+% =====================================================================
+\appendix
+\chapter{Załącznik: kod źródłowy}
+\label{ch:appendix}
+
+Kompletny, działający i skomentowany kod źródłowy projektu jest dostępny
+w publicznym repozytorium Git:
+
+\begin{center}
+\large\url{https://github.com/HoneyWatch/HoneyWatchApp}
+\end{center}
+
+\section{Struktura repozytorium}
+
+\begin{lstlisting}[caption={Struktura katalogów projektu.}]
+HoneyWatchApp/
+|-- README.md                 # Opis projektu
+|-- requirements.txt          # Zaleznosci (Flask)
+|-- dashboard/                # Aplikacja webowa (Flask)
+|   |-- app.py                # Endpointy: 1 strona HTML + API JSON
+|   |-- db.py                 # Warstwa danych i logika analityczna
+|   |-- geoip.py              # Geolokalizacja IP + cache
+|   |-- iso_codes.py          # Mapowanie ISO alpha2 -> alpha3
+|   |-- templates/            # Szablony Jinja2
+|   `-- static/               # CSS + JavaScript (mapa, wykresy)
+|-- data/
+|   `-- geo_cache.json        # Pamiec podreczna geolokalizacji
+`-- deploy/                   # Wdrozenie na VPS
+    |-- parser.py             # Parser logow (Cowrie + OpenCanary)
+    |-- install-vps.sh        # Skrypt instalacyjny
+    |-- honeywatch-dashboard.service  # Usluga systemd
+    `-- VPS.md                # Instrukcja wdrozeniowa
+\end{lstlisting}
+
+\section{Uruchomienie lokalne}
+
+\begin{lstlisting}[style=bashstyle,caption={Uruchomienie panelu w środowisku deweloperskim.}]
+# 1. Instalacja zaleznosci
+python -m venv venv
+venv\Scripts\activate          # Windows
+pip install -r requirements.txt
+
+# 2. Wskazanie kopii bazy danych (opcjonalnie)
+set HONEYWATCH_DB=C:\sciezka\do\honeywatch.db
+
+# 3. Uruchomienie panelu
+python -m dashboard.app
+# Panel dostepny pod http://localhost:5000
+\end{lstlisting}
+
+\section{Uruchomienie parsera (serwer VPS)}
+
+\begin{lstlisting}[style=bashstyle,caption={Cykliczne uruchamianie parsera przez cron.}]
+# Wpis w crontab (uruchomienie co minute)
+* * * * * /opt/honeywatch/venv/bin/python /opt/honeywatch/parser.py
+\end{lstlisting}
+
+\end{document}
+
+
+
+
+
+
