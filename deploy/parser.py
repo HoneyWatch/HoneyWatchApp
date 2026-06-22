@@ -243,45 +243,105 @@ def parse_cowrie() -> None:
     print(f"Cowrie: {inserted} new rows at {datetime.now()}")
 
 
-def parse_dionaea():
-    dionaea_db_path = '/opt/honeywatch/dionaea/lib/dionaea.sqlite'
-    if not os.path.exists(dionaea_db_path):
-        print(f"Brak bazy Dionaea: {dionaea_db_path}")
-        return
+DIONAEA_LOG = '/opt/dionaea/var/log/dionaea/dionaea.json'
 
+EVENT_MAP = {
+    "connection": "connect",
+    "http_request": "http_request",
+    "download": "malware_download"
+}
+
+def classify_attack(command=None, path=None):
+    text = ((command or "") + " " + (path or "")).lower()
+
+    if any(x in text for x in ["wget", "curl"]):
+        return "malware_download"
+
+    if any(x in text for x in ["select", "union", "sleep("]):
+        return "sqli"
+
+    if "/etc/passwd" in text:
+        return "lfi"
+
+    if any(x in text for x in ["bash", "sh", "nc ", "netcat"]):
+        return "rce"
+
+    if any(x in text for x in ["nmap", "masscan", "zmap"]):
+        return "scanner"
+
+    return "unknown"
+
+
+def parse_dionaea():
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
-    
-    try:
-        # Podłączamy zewnętrzną bazę w trybie tylko do odczytu (ro), aby nie blokować aplikacji
-        d_conn = sqlite3.connect(f"file:{dionaea_db_path}?mode=ro", uri=True)
-        d_c = d_conn.cursor()
-        
-        # Zapytanie odczytujące połączenia sieciowe (gotowe pod dodanie opcji parser_state)
-        d_c.execute("SELECT connection_timestamp, remote_host, remote_port, connection_protocol FROM connections")
-        rows = d_c.fetchall()
-        
-        for row in rows:
-            dt = datetime.fromtimestamp(row[0]).isoformat() if row[0] else None
-            src_ip = row[1]
-            src_port = row[2]
-            protocol = row[3]
-            event_type = f'dionaea_{protocol}'
-            
-            c.execute('''INSERT INTO attacks 
-                        (timestamp, src_ip, src_port, event_type, source)
-                        VALUES (?, ?, ?, ?, ?)''',
-                      (dt, src_ip, src_port, event_type, 'dionaea'))
-        
-        conn.commit()
-        print(f"Dionaea parsed at {datetime.now()}")
-        
-    except sqlite3.Error as e:
-        print(f"Błąd podczas parsowania bazy Dionaea: {e}")
-    finally:
-        if 'd_conn' in locals():
-            d_conn.close()
-        conn.close()
+
+    if not os.path.exists(DIONAEA_LOG):
+        print(f"Brak pliku Dionaea: {DIONAEA_LOG}")
+        return
+
+    position = get_position('dionaea')
+
+    with open(DIONAEA_LOG, 'r') as f:
+        f.seek(position)
+
+        for line in f:
+            try:
+                entry = json.loads(line.strip())
+
+                raw_event = entry.get("eventid")
+                event_type = EVENT_MAP.get(raw_event, "unknown")
+
+                connection = entry.get("connection", {})
+                src_ip = connection.get("remote", {}).get("host")
+                src_port = connection.get("remote", {}).get("port")
+                timestamp = entry.get("timestamp")
+
+                # 🔹 Zawsze twórz attack (spójny model)
+                c.execute('''INSERT INTO attacks 
+                    (timestamp, src_ip, src_port, username, password, success, event_type, source)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (timestamp, src_ip, src_port,
+                     None, None, None, event_type, 'dionaea'))
+
+                attack_id = c.lastrowid
+
+                # 🔹 HTTP request
+                if raw_event == "http_request":
+                    method = entry.get("request", {}).get("method")
+                    path = entry.get("request", {}).get("path")
+
+                    attack_type = classify_attack(path=path)
+
+                    c.execute('''INSERT INTO http_attacks
+                        (attack_id, timestamp, src_ip, method, path, attack_type)
+                        VALUES (?, ?, ?, ?, ?, ?)''',
+                        (attack_id, timestamp, src_ip, method, path, attack_type))
+
+                # 🔹 Malware download
+                elif raw_event == "download":
+                    url = entry.get("url")
+
+                    c.execute('''INSERT INTO commands
+                        (attack_id, timestamp, src_ip, command)
+                        VALUES (?, ?, ?, ?)''',
+                        (attack_id, timestamp, src_ip, f"DOWNLOAD {url}"))
+
+                # 🔹 Inne eventy jako commands (debug + przyszłość)
+                elif raw_event not in ["connection"]:
+                    c.execute('''INSERT INTO commands
+                        (attack_id, timestamp, src_ip, command)
+                        VALUES (?, ?, ?, ?)''',
+                        (attack_id, timestamp, src_ip, raw_event))
+
+            except Exception:
+                continue
+
+        save_position('dionaea', f.tell())
+
+    conn.commit()
+    conn.close()
+    print(f"Dionaea parsed at {datetime.now()}")
 
 
 def parse_opencanary() -> None:
