@@ -1,4 +1,4 @@
-"""HoneyWatch log parser — Cowrie + Dionaea + OpenCanary -> SQLite.
+"""HoneyWatch log parser — Cowrie + OpenCanary -> SQLite.
 
 Reads only *new* bytes from each log file (parser_state). Identical events
 are skipped via UNIQUE indexes (same IP may attack many times; exact duplicates
@@ -14,41 +14,26 @@ from datetime import datetime
 DB_PATH = "/opt/honeywatch/honeywatch.db"
 COWRIE_LOG = "/home/cowrie/cowrie/var/log/cowrie/cowrie.json"
 OPENCANARY_LOG = "/var/log/opencanary.log"
-# Dionaea log_json ihandler output (file:// handler). Common alternatives:
-#   /opt/dionaea/var/lib/dionaea/dionaea.json, /var/lib/dionaea/dionaea.json
-DIONAEA_LOG = "/opt/dionaea/var/lib/dionaea/dionaea.json"
+# Path varies between installs (statedir), so allow an env override.
+DIONAEA_LOG = os.environ.get("DIONAEA_LOG", "/var/lib/dionaea/dionaea.json")
 
-# Map Dionaea service/protocol names to dashboard event_type values.
-# Unknown protocols fall back to their lowercased name (shown as "Other").
-DIONAEA_PROTOCOL_MAP = {
-    "httpd": "http_probe",
-    "http": "http_probe",
+# Dionaea service protocol -> dashboard event_type (matches db.py _EVENT_LABELS).
+_DIONAEA_PROTO_MAP = {
     "ftp": "ftp",
     "ftpd": "ftp",
-    "smbd": "smb",
-    "smb": "smb",
-    "mysqld": "mysql",
+    "http": "http_probe",
+    "httpd": "http_probe",
+    "https": "http_probe",
     "mysql": "mysql",
-    "mssqld": "mssql",
+    "mysqld": "mysql",
     "mssql": "mssql",
-    "sipsession": "sip",
+    "mssqld": "mssql",
+    "tds": "mssql",
     "sip": "sip",
-    "epmapper": "epmap",
-    "mqttd": "mqtt",
-    "mqtt": "mqtt",
-    "tftp": "tftp",
-    "tftpd": "tftp",
-    "pptp": "pptp",
-    "upnp": "upnp",
-    "blackhole": "blackhole",
-    "mongod": "mongodb",
-    "mongo": "mongodb",
-    "memcached": "memcache",
-    "memcache": "memcache",
+    "sipsession": "sip",
+    "smb": "smb",
+    "smbd": "smb",
 }
-
-# Only inbound connection types are real attacks; skip listen/connect (outbound).
-DIONAEA_INBOUND_TYPES = {"accept", "reject"}
 
 
 def init_db() -> None:
@@ -278,120 +263,24 @@ def parse_cowrie() -> None:
     print(f"Cowrie: {inserted} new rows at {datetime.now()}")
 
 
-<<<<<<< Updated upstream
-DIONAEA_LOG = '/opt/dionaea/var/log/dionaea/dionaea.json'
-
-EVENT_MAP = {
-    "connection": "connect",
-    "http_request": "http_request",
-    "download": "malware_download"
-}
-
-def classify_attack(command=None, path=None):
-    text = ((command or "") + " " + (path or "")).lower()
-
-    if any(x in text for x in ["wget", "curl"]):
-        return "malware_download"
-
-    if any(x in text for x in ["select", "union", "sleep("]):
-        return "sqli"
-
-    if "/etc/passwd" in text:
-        return "lfi"
-
-    if any(x in text for x in ["bash", "sh", "nc ", "netcat"]):
-        return "rce"
-
-    if any(x in text for x in ["nmap", "masscan", "zmap"]):
-        return "scanner"
-
-    return "unknown"
-
-
-def parse_dionaea():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-
-    if not os.path.exists(DIONAEA_LOG):
-        print(f"Brak pliku Dionaea: {DIONAEA_LOG}")
-        return
-
-    position = get_position('dionaea')
-
-    with open(DIONAEA_LOG, 'r') as f:
-        f.seek(position)
-
-        for line in f:
-            try:
-                entry = json.loads(line.strip())
-
-                raw_event = entry.get("eventid")
-                event_type = EVENT_MAP.get(raw_event, "unknown")
-
-                connection = entry.get("connection", {})
-                src_ip = connection.get("remote", {}).get("host")
-                src_port = connection.get("remote", {}).get("port")
-                timestamp = entry.get("timestamp")
-
-                # 🔹 Zawsze twórz attack (spójny model)
-                c.execute('''INSERT INTO attacks 
-                    (timestamp, src_ip, src_port, username, password, success, event_type, source)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
-                    (timestamp, src_ip, src_port,
-                     None, None, None, event_type, 'dionaea'))
-
-                attack_id = c.lastrowid
-
-                # 🔹 HTTP request
-                if raw_event == "http_request":
-                    method = entry.get("request", {}).get("method")
-                    path = entry.get("request", {}).get("path")
-
-                    attack_type = classify_attack(path=path)
-
-                    c.execute('''INSERT INTO http_attacks
-                        (attack_id, timestamp, src_ip, method, path, attack_type)
-                        VALUES (?, ?, ?, ?, ?, ?)''',
-                        (attack_id, timestamp, src_ip, method, path, attack_type))
-
-                # 🔹 Malware download
-                elif raw_event == "download":
-                    url = entry.get("url")
-
-                    c.execute('''INSERT INTO commands
-                        (attack_id, timestamp, src_ip, command)
-                        VALUES (?, ?, ?, ?)''',
-                        (attack_id, timestamp, src_ip, f"DOWNLOAD {url}"))
-
-                # 🔹 Inne eventy jako commands (debug + przyszłość)
-                elif raw_event not in ["connection"]:
-                    c.execute('''INSERT INTO commands
-                        (attack_id, timestamp, src_ip, command)
-                        VALUES (?, ?, ?, ?)''',
-                        (attack_id, timestamp, src_ip, raw_event))
-
-            except Exception:
-                continue
-
-        save_position('dionaea', f.tell())
-
-    conn.commit()
-    conn.close()
-    print(f"Dionaea parsed at {datetime.now()}")
-=======
-def _dionaea_event_type(protocol: str | None) -> str:
-    """Map a Dionaea connection protocol to a dashboard event_type."""
-    key = (protocol or "").strip().lower()
-    return DIONAEA_PROTOCOL_MAP.get(key, key or "dionaea_conn")
+def _dionaea_event_type(protocol: str | None, dst_port: int | None) -> str:
+    """Map a Dionaea protocol/port to a dashboard event_type."""
+    if protocol:
+        mapped = _DIONAEA_PROTO_MAP.get(protocol.lower())
+        if mapped:
+            return mapped
+    if dst_port:
+        return f"port_{dst_port}"
+    return "connect"
 
 
 def parse_dionaea() -> None:
-    """Parse the Dionaea log_json output into the shared schema.
+    """Parse Dionaea log_json output into the attacks table.
 
-    One JSON object is emitted per connection (on free). Maps to:
-      - attacks: one row per inbound connection (event_type = service name)
-      - attacks: one login_failed row per captured credential pair
-      - commands: one row per FTP command
+    Handles both the flat record written by the ihandler (``src_ip``/``dst_ip``
+    at top level) and the nested form from the docs (``connection.remote`` /
+    ``connection.local``). One row per accepted connection; one row per
+    credential pair when login attempts are present.
     """
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
@@ -401,61 +290,57 @@ def parse_dionaea() -> None:
         try:
             entry = json.loads(line)
             connection = entry.get("connection") or {}
-            conn_type = (connection.get("type") or "").lower()
-            if conn_type not in DIONAEA_INBOUND_TYPES:
+            conn_type = connection.get("type")
+            # Skip non-attack events: dionaea binding ports ("listen") and its
+            # own outgoing connections ("connect", e.g. malware download).
+            if conn_type in ("listen", "connect", "free"):
                 continue
 
-            src_ip = entry.get("src_ip")
+            remote = connection.get("remote") or {}
+            local = connection.get("local") or {}
+            src_ip = entry.get("src_ip") or remote.get("address")
             if not src_ip:
                 continue
-            src_port = entry.get("src_port")
+            src_port = entry.get("src_port") or remote.get("port")
+            dst_port = entry.get("dst_port") or local.get("port")
             ts = entry.get("timestamp")
-            event_type = _dionaea_event_type(connection.get("protocol"))
+            event_type = _dionaea_event_type(connection.get("protocol"), dst_port)
 
-            c.execute(
-                """INSERT OR IGNORE INTO attacks
-                (timestamp, src_ip, src_port, username, password, success, event_type, source)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (ts, src_ip, src_port, None, None, None, event_type, "dionaea"),
-            )
-            if c.rowcount:
-                inserted += 1
+            credentials = entry.get("credentials") or []
+            if credentials:
+                rows = [
+                    (
+                        ts,
+                        src_ip,
+                        src_port,
+                        cred.get("username"),
+                        cred.get("password"),
+                        0,
+                        event_type,
+                        "dionaea",
+                    )
+                    for cred in credentials
+                ]
+            else:
+                rows = [
+                    (ts, src_ip, src_port, None, None, 0, event_type, "dionaea")
+                ]
 
-            for cred in entry.get("credentials") or []:
-                username = cred.get("username")
-                password = cred.get("password")
-                if username is None and password is None:
-                    continue
+            for row in rows:
                 c.execute(
                     """INSERT OR IGNORE INTO attacks
                     (timestamp, src_ip, src_port, username, password, success, event_type, source)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (ts, src_ip, src_port, username, password, 0, "login_failed", "dionaea"),
+                    row,
                 )
                 if c.rowcount:
                     inserted += 1
-
-            ftp = entry.get("ftp") or {}
-            for cmd in ftp.get("commands") or []:
-                command = cmd.get("command")
-                if not command:
-                    continue
-                arguments = cmd.get("arguments")
-                full = command if not arguments else f"{command} {arguments}"
-                c.execute(
-                    """INSERT OR IGNORE INTO commands (timestamp, src_ip, command)
-                    VALUES (?, ?, ?)""",
-                    (ts, src_ip, full),
-                )
-                if c.rowcount:
-                    inserted += 1
-        except (json.JSONDecodeError, TypeError, sqlite3.Error):
+        except (json.JSONDecodeError, TypeError, AttributeError, sqlite3.Error):
             continue
 
     conn.commit()
     conn.close()
     print(f"Dionaea: {inserted} new rows at {datetime.now()}")
->>>>>>> Stashed changes
 
 
 def parse_opencanary() -> None:

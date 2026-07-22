@@ -55,6 +55,7 @@ _EVENT_LABELS = {
     "login_success": ("Successful Login", "#ea7c1f"),
     "command": ("Command Execution", "#7c2d12"),
     "http_probe": ("HTTP Probe", "#2563eb"),
+    "smb": ("SMB", "#6366f1"),
     "ftp": ("FTP", "#16a34a"),
     "mysql": ("MySQL", "#0891b2"),
     "rdp": ("RDP", "#7c3aed"),
@@ -62,15 +63,6 @@ _EVENT_LABELS = {
     "mssql": ("MSSQL", "#db2777"),
     "sip": ("SIP", "#059669"),
     "vnc": ("VNC", "#dc2626"),
-    "smb": ("SMB", "#9333ea"),
-    "epmap": ("EPMAP / RPC", "#7c3aed"),
-    "mqtt": ("MQTT", "#0ea5e9"),
-    "tftp": ("TFTP", "#14b8a6"),
-    "upnp": ("UPnP", "#f97316"),
-    "mongodb": ("MongoDB", "#22c55e"),
-    "memcache": ("Memcached", "#a16207"),
-    "pptp": ("PPTP", "#6366f1"),
-    "blackhole": ("Blackhole", "#475569"),
 }
 _DEFAULT_EVENT = ("Other", "#64748b")
 
